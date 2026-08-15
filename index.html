@@ -1708,11 +1708,39 @@ async function shareInvWhatsApp(id){
     drawTableHeader();
 
     doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
+    let runningTotal=0; // track subtotal across pages
+    let pageItemSubtotal=0; // subtotal for items on current page
+
     its.forEach((it,idx)=>{
-      checkY(9);
-      // If new page was added, redraw table header
-      if(y===15){drawTableHeader();}
       const amt=Number(it.quantity)*Number(it.unit_price);
+      // Avoid orphan: if last 1-2 items won't fit with totals, move to new page
+      const remaining=its.length-idx;
+      const spaceNeeded=remaining*8+(remaining<=2?60:9);
+      const needsNewPage=(y+spaceNeeded>MARGIN_BOT&&remaining<=2)||(y+9>MARGIN_BOT);
+
+      if(needsNewPage){
+        // Draw carried-forward subtotal at bottom of this page
+        doc.setFillColor(245,245,245);doc.rect(ML,y+1,MR-ML,8,'F');
+        doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(80,80,80);
+        doc.text('Subtotal carried forward →',ML+2,y+6);
+        doc.text('RM '+fmt(runningTotal),MR,y+6,{align:'right'});
+        y+=10;
+        // Add new page
+        addPage();
+        drawTableHeader();
+        // Draw brought-forward subtotal at top of new page
+        doc.setFillColor(245,245,245);doc.rect(ML,y-1,MR-ML,8,'F');
+        doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(80,80,80);
+        doc.text('← Subtotal brought forward',ML+2,y+5);
+        doc.text('RM '+fmt(runningTotal),MR,y+5,{align:'right'});
+        doc.setFont('helvetica','normal');
+        doc.setDrawColor(200,200,200);doc.line(ML,y+7,MR,y+7);
+        y+=10;
+        pageItemSubtotal=0;
+      }
+
+      runningTotal+=amt;
+      pageItemSubtotal+=amt;
       if(idx%2===0){doc.setFillColor(252,252,252);doc.rect(ML,y-1,MR-ML,8,'F');}
       doc.setFontSize(8);doc.setTextColor(150,150,150);
       doc.text(String(idx+1),ML+3,y+5);
@@ -1730,8 +1758,10 @@ async function shareInvWhatsApp(id){
     });
     if(!its.length){doc.setTextColor(150,150,150);doc.setFontSize(9);doc.text('No items recorded.',ML+4,y+6);y+=12;}
 
-    // ── TOTALS ──
-    y+=4;checkY(40);
+    // ── TOTALS — keep entire block together on same page ──
+    y+=4;
+    const totalsH=(tx>0?14:0)+10+(paid>0?14:0)+(inv.notes?22:0)+20;
+    if(y+totalsH>MARGIN_BOT){addPage();}
     const totW=80,totX=MR-totW;
     const addTotRow=(label,val,bold,rgb)=>{
       checkY(10);
