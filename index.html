@@ -659,7 +659,11 @@ function rDash(){
 
 // ── ITEM ROWS ──
 let rc={s:0,p:0,es:0,ep:0};
-const supOpts=()=>'<option value="">Supplier...</option>'+S.sups.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`).join('');
+const supOpts=()=>{
+  const names=new Set(S.sups.map(s=>s.name));
+  S.purch.forEach(p=>{if(p.supplier_name)names.add(p.supplier_name);});
+  return'<option value="">Supplier...</option>'+[...names].sort().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+};
 
 function addSaleRow(){
   const container=$('s-items');
@@ -893,7 +897,18 @@ function fillRow(row,data,t){
   row.querySelector('.uom-inp').value=data.uom||'';
   row.querySelector('.qty-inp').value=data.qty||'';
   row.querySelector('.price-inp').value=data.unit_price>0?data.unit_price:'';
-  if(t==='p'){const sel=row.querySelector('.sup-sel');if(sel&&data.supplier)sel.value=data.supplier;}
+  if(t==='p'||t==='ep'){
+    const sel=row.querySelector('.sup-sel');
+    if(sel&&data.supplier){
+      // If supplier not in options (e.g. not in suppliers table), add it
+      if(![...sel.options].some(o=>o.value===data.supplier)){
+        const opt=document.createElement('option');
+        opt.value=data.supplier;opt.textContent=data.supplier;
+        sel.appendChild(opt);
+      }
+      sel.value=data.supplier;
+    }
+  }
   recalc(row.querySelector('.price-inp'),t);
 }
 
