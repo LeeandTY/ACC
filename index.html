@@ -1361,7 +1361,7 @@ function printInv(id){
   <div class="tots"><div class="tr"><span>Subtotal</span><span>RM ${fmt(sub)}</span></div>${tx>0?`<div class="tr"><span>SST (${tx}%)</span><span>RM ${fmt(ta)}</span></div>`:''}<div class="tr gd"><span>TOTAL DUE</span><span>RM ${fmt(tot)}</span></div></div>
   ${inv.notes?`<div class="ft"><strong>Terms:</strong> ${esc(inv.notes)}</div>`:''}
   <div class="ft" style="margin-top:16px">Thank you for your business.</div>
-  <script>window.onload=function(){setTimeout(function(){window.print();},200);}<\/script></body></html>`);
+  <scr"+"ipt>window.onload=function(){setTimeout(function(){window.print();},200);}<\/script></body></html>`);
   w.document.close();
 }
 
@@ -1466,7 +1466,7 @@ function exportPriceListPDF(){
     items.forEach(x=>{const m=x.cost_price>0?((x.sell_price-x.cost_price)/x.cost_price*100):null;html+=`<tr><td>${esc(x.name)}</td><td>${esc(x.category||'—')}</td><td>${esc(x.unit||'—')}</td><td class="n">${x.cost_price>0?fmt(x.cost_price):'TBC'}</td><td class="n">${x.sell_price>0?fmt(x.sell_price):'TBC'}</td><td class="n">${m!==null?m.toFixed(1)+'%':'—'}</td></tr>`;});
     html+=`</tbody></table>`;
   }
-  html+=`<div class="ft">${esc(p.address||'')} · Confidential</div><script>window.onload=function(){setTimeout(function(){window.print();},200);}<\/script></body></html>`;
+  html+=`<div class="ft">${esc(p.address||'')} · Confidential</div><scr"+"ipt>window.onload=function(){setTimeout(function(){window.print();},200);}<\/script></body></html>`;
   const w=window.open('','_blank','width=750,height=600');w.document.write(html);w.document.close();
 }
 
@@ -1633,6 +1633,149 @@ function expBkp(){const b={version:3,exportedAt:new Date().toISOString(),sales:S
 
 // ── WHATSAPP PDF ──
 async function shareInvWhatsApp(id){
+  const inv=S.invs.find(i=>i.id===id);if(!inv)return;
+  toast('Generating PDF...','ok');
+  const{data:itemsData}=await sb.from('invoice_items').select('*').eq('invoice_id',id).order('sort_order',{ascending:true});
+  const its=itemsData||[];
+  const p=S.cfg;
+  const sub=its.length?its.reduce((s,i)=>s+Number(i.quantity)*Number(i.unit_price),0):Number(inv.subtotal||inv.total||0);
+  const tx=Number(inv.tax_rate||0),ta=sub*(tx/100),tot=tx>0?sub+ta:Number(inv.total||sub);
+  const paid=Number(inv._paid||0),bal=tot-paid;
+  try{
+    const{jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+    const W=210,ML=15,MR=195,PH=297,FOOTER_H=12,MARGIN_BOT=PH-FOOTER_H-5;
+    let y=0,page=1;
+
+    const drawFooter=()=>{
+      doc.setFillColor(224,123,42);doc.rect(0,PH-FOOTER_H,W,FOOTER_H,'F');
+      doc.setTextColor(255,255,255);doc.setFontSize(7);doc.setFont('helvetica','normal');
+      doc.text(`${p.company||'L&TY Trading'} · ${inv.invoice_number} · Page ${page}`,W/2,PH-FOOTER_H+8,{align:'center'});
+    };
+
+    const addPage=()=>{
+      drawFooter();doc.addPage();page++;y=15;
+    };
+
+    const checkY=(needed=10)=>{if(y+needed>MARGIN_BOT)addPage();};
+
+    const drawTableHeader=()=>{
+      doc.setFillColor(224,123,42);doc.rect(ML,y,MR-ML,8,'F');
+      doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');
+      doc.text('#',ML+3,y+5.5);
+      doc.text('Description',ML+11,y+5.5);
+      doc.text('Qty',MR-55,y+5.5,{align:'right'});
+      doc.text('Unit Price (RM)',MR-30,y+5.5,{align:'right'});
+      doc.text('Amount (RM)',MR,y+5.5,{align:'right'});
+      y+=10;
+    };
+
+    // ── PAGE 1 HEADER ──
+    doc.setFillColor(224,123,42);doc.rect(0,0,W,36,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(18);doc.setFont('helvetica','bold');
+    doc.text(p.company||'L&TY Trading',ML,14);
+    doc.setFontSize(8);doc.setFont('helvetica','normal');
+    let cdy=20;
+    if(p.address){doc.text(p.address,ML,cdy);cdy+=5;}
+    if(p.phone){doc.text('Tel: '+p.phone,ML,cdy);cdy+=5;}
+    if(p.email)doc.text(p.email,ML,cdy);
+    doc.setFontSize(22);doc.setFont('helvetica','bold');
+    doc.text('INVOICE',MR,14,{align:'right'});
+    doc.setFontSize(10);doc.setFont('helvetica','normal');
+    doc.text(inv.invoice_number,MR,22,{align:'right'});
+
+    // ── INFO ROW ──
+    y=44;
+    doc.setFillColor(248,248,248);doc.roundedRect(ML,y,85,28,2,2,'F');
+    doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(180,100,20);
+    doc.text('BILL TO',ML+4,y+6);
+    doc.setTextColor(30,30,30);doc.setFontSize(11);doc.setFont('helvetica','bold');
+    doc.text(inv.client?.name||'—',ML+4,y+13);
+    if(inv.client?.address){doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(80,80,80);
+      const addr=doc.splitTextToSize(inv.client.address,75);doc.text(addr,ML+4,y+19);}
+    doc.setFillColor(248,248,248);doc.roundedRect(MR-75,y,75,28,2,2,'F');
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(100,100,100);
+    const drows=[['Invoice No.',inv.invoice_number],['Date',fmtD(inv.issue_date)],['Due Date',inv.due_date?fmtD(inv.due_date):'—'],['Status',capSt(inv.status)]];
+    drows.forEach(([k,v],i)=>{
+      doc.text(k+':',MR-73,y+7+i*6);
+      doc.setTextColor(30,30,30);doc.setFont('helvetica','bold');
+      doc.text(String(v),MR-2,y+7+i*6,{align:'right'});
+      doc.setFont('helvetica','normal');doc.setTextColor(100,100,100);
+    });
+
+    // ── ITEMS TABLE ──
+    y+=34;
+    drawTableHeader();
+
+    doc.setFont('helvetica','normal');doc.setTextColor(30,30,30);
+    its.forEach((it,idx)=>{
+      checkY(9);
+      // If new page was added, redraw table header
+      if(y===15){drawTableHeader();}
+      const amt=Number(it.quantity)*Number(it.unit_price);
+      if(idx%2===0){doc.setFillColor(252,252,252);doc.rect(ML,y-1,MR-ML,8,'F');}
+      doc.setFontSize(8);doc.setTextColor(150,150,150);
+      doc.text(String(idx+1),ML+3,y+5);
+      doc.setTextColor(30,30,30);doc.setFontSize(9);
+      const desc=String(it.description||'').substring(0,45);
+      doc.text(desc,ML+11,y+5);
+      const qtyStr=Number(it.quantity)%1===0?String(Number(it.quantity)):Number(it.quantity).toFixed(2);
+      doc.text(qtyStr,MR-55,y+5,{align:'right'});
+      doc.text(fmt(it.unit_price),MR-30,y+5,{align:'right'});
+      doc.setFont('helvetica','bold');
+      doc.text(fmt(amt),MR,y+5,{align:'right'});
+      doc.setFont('helvetica','normal');
+      doc.setDrawColor(235,235,235);doc.line(ML,y+7,MR,y+7);
+      y+=8;
+    });
+    if(!its.length){doc.setTextColor(150,150,150);doc.setFontSize(9);doc.text('No items recorded.',ML+4,y+6);y+=12;}
+
+    // ── TOTALS ──
+    y+=4;checkY(40);
+    const totW=80,totX=MR-totW;
+    const addTotRow=(label,val,bold,rgb)=>{
+      checkY(10);
+      if(bold){doc.setFillColor(224,123,42);doc.rect(totX,y-1,totW,9,'F');doc.setTextColor(255,255,255);}
+      else{doc.setTextColor(rgb||[80,80,80]);}
+      doc.setFontSize(bold?10:9);doc.setFont('helvetica',bold?'bold':'normal');
+      doc.text(label,totX+3,y+5);
+      doc.text('RM '+fmt(val),MR,y+5,{align:'right'});
+      y+=bold?10:7;
+    };
+    if(tx>0){addTotRow('Subtotal',sub,false,null);addTotRow(`SST (${tx}%)`,ta,false,null);}
+    addTotRow('TOTAL DUE',tot,true,null);
+    if(paid>0){y+=2;addTotRow('Amount Paid',paid,false,[22,163,74]);addTotRow('Balance Due',bal,false,bal>0?[220,38,38]:[22,163,74]);}
+
+    // ── NOTES ──
+    if(inv.notes){
+      y+=6;checkY(16);
+      doc.setFillColor(255,250,240);doc.roundedRect(ML,y,MR-ML,12,2,2,'F');
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(180,100,20);
+      doc.text('Terms & Notes:',ML+4,y+5);
+      doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+      doc.text(String(inv.notes).substring(0,100),ML+4,y+10);
+      y+=16;
+    }
+    y+=4;checkY(10);
+    doc.setFontSize(9);doc.setFont('helvetica','italic');doc.setTextColor(150,150,150);
+    doc.text('Thank you for your business!',W/2,y+6,{align:'center'});
+
+    // Footer on last page
+    drawFooter();
+
+    // ── SHARE ──
+    const blob=doc.output('blob');
+    const file=new File([blob],`${inv.invoice_number}.pdf`,{type:'application/pdf'});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:inv.invoice_number});
+    }else{
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download=`${inv.invoice_number}.pdf`;a.click();
+      URL.revokeObjectURL(url);
+      toast('PDF downloaded — share via WhatsApp','ok');
+    }
+  }catch(e){if(e.name!=='AbortError')toast('Error: '+e.message,'err');}
+}
   const inv=S.invs.find(i=>i.id===id);if(!inv)return;
   toast('Generating PDF...','ok');
   // Always fetch items fresh from DB to ensure latest data
@@ -1817,7 +1960,7 @@ function printMonthly(yrParam,moParam){
   <tr style="background:#f9f9f9"><td style="font-weight:700">Net Profit / (Loss)</td><td class="n" style="font-weight:800;color:${net>=0?'#16A34A':'#DC2626'}">${net>=0?'+':''}RM ${fmt(net)}</td></tr>
   </tbody></table>
   <div class="note">This report is for reference only. Please verify with your accountant for tax purposes.</div>
-  <script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script></body></html>`);
+  <scr"+"ipt>window.onload=function(){setTimeout(function(){window.print();},300);}<\/scr"+"ipt></body></html>`);
   w.document.close();
 }
 function printTax(yrParam){
@@ -1861,7 +2004,7 @@ function printTax(yrParam){
   ${catRows?`<h2>Purchases by Category</h2><table><thead><tr><th>Category</th><th class="n">Amount (RM)</th><th class="n">% of Total</th></tr></thead><tbody>${catRows}</tbody><tfoot><tr><td><strong>Total Purchases</strong></td><td class="n">RM ${fmt(tp)}</td><td class="n">100%</td></tr></tfoot></table>`:''}
   ${expRows?`<h2>Expenses by Category</h2><table><thead><tr><th>Category</th><th class="n">Amount (RM)</th><th class="n">% of Total</th></tr></thead><tbody>${expRows}</tbody><tfoot><tr><td><strong>Total Expenses</strong></td><td class="n">RM ${fmt(te)}</td><td class="n">100%</td></tr></tfoot></table>`:''}
   <div class="note">Generated: ${new Date().toLocaleString()} · For income tax reference only. Verify figures with a qualified accountant.</div>
-  <script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script></body></html>`);
+  <scr"+"ipt>window.onload=function(){setTimeout(function(){window.print();},300);}<\/scr"+"ipt></body></html>`);
   w.document.close();
 }
 
