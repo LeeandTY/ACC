@@ -598,7 +598,7 @@ function fillSels(){
 async function doSync(){$('sync-ic').className='fa-solid fa-arrows-rotate fa-spin';await loadAll();const pg=document.querySelector('.page.on')?.id?.replace('page-','');if(pg)rPage(pg);$('sync-ic').className='fa-solid fa-arrows-rotate';toast('Refreshed','ok');}
 
 function gp(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));$('page-'+id).classList.add('on');btn?.classList.add('on');rPage(id);}
-function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}rRep();}else if(id==='set'){rSet();setTimeout(rActLog,50);}}
+function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}rRep();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();},50);}}
 function stab(t,btn){$('s-add').style.display=t==='add'?'block':'none';$('s-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#page-sales .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rSH();}
 function ptab(t,btn){['add','hist','exp','dft'].forEach(k=>$('p-'+k).style.display=t===k?'block':'none');document.querySelectorAll('#page-purch .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rPH();else if(t==='exp')rEH();else if(t==='dft')rDfts();}
 function etab(t,btn){$('exp-add').style.display=t==='add'?'block':'none';$('exp-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#p-exp .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rEH();}
@@ -1603,7 +1603,12 @@ function rSet(){
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-pen-to-square"></i>Rename Item</span></div><div class="card-bd"><button class="btn btn-fw" onclick="openRenameModal()"><i class="fa-solid fa-pen"></i> Rename an item in the price list</button></div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-palette"></i>Appearance</span></div><div class="card-bd"><button class="btn btn-fw" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i> Toggle Dark / Light Mode</button></div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-database"></i>Data &amp; Export</span></div><div class="card-bd">
-    <button class="btn btn-fw" onclick="expBkp()" style="margin-bottom:10px"><i class="fa-solid fa-download"></i> Export Backup (JSON)</button>
+    <div id="bkp-status" style="font-size:12px;color:var(--t3);margin-bottom:8px;text-align:center"></div>
+    <button class="btn btn-pr btn-fw" onclick="expBkp()" style="margin-bottom:8px"><i class="fa-solid fa-download"></i> Export Backup (JSON)</button>
+    <label class="btn btn-fw" style="margin-bottom:10px;cursor:pointer;background:var(--surf);border:1px solid var(--bdr);text-align:center;padding:10px;border-radius:var(--rs);font-size:13px;font-weight:600">
+      <i class="fa-solid fa-upload" style="color:var(--br);margin-right:6px"></i> Restore from Backup
+      <input type="file" accept=".json" style="display:none" onchange="importBackup(this)">
+    </label>
     <button class="btn btn-fw" onclick="exportPriceListPDF()" style="margin-bottom:10px"><i class="fa-solid fa-file-pdf"></i> Price List PDF</button>
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
       <select class="inp sm" id="rpt-mo" style="flex:1">${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}"${m===new Date().getMonth()+1?' selected':''}>${new Date(2000,m-1,1).toLocaleDateString('en-MY',{month:'long'})}</option>`).join('')}</select>
@@ -1629,7 +1634,145 @@ function addIC(){const v=prompt('New item category:');if(v?.trim()){S.cfg.itemCa
 function editIC(i){const v=prompt('Edit:',S.cfg.itemCats[i]);if(v?.trim()){S.cfg.itemCats[i]=v.trim();saveCfg();rSet();}}
 function rmIC(i){if(!confirm('Remove?'))return;S.cfg.itemCats.splice(i,1);saveCfg();rSet();}
 
-function expBkp(){const b={version:3,exportedAt:new Date().toISOString(),sales:S.sales,saleItems:S.sItems,purchases:S.purch,purchaseItems:S.pItems,invoices:S.invs,payments:S.pays,expenses:S.exps,drafts:S.drafts,prices:S.prices,customers:S.custs,suppliers:S.sups};const u=URL.createObjectURL(new Blob([JSON.stringify(b,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download=`LeeAndTY_backup_${today()}.json`;a.click();URL.revokeObjectURL(u);toast('Backup exported','ok');}
+function showBkpStatus(){
+  const el=$('bkp-status');if(!el)return;
+  const last=localStorage.getItem('lty_last_backup');
+  if(!last){el.innerHTML='<i class="fa-solid fa-triangle-exclamation"></i> No backup yet — tap Export Backup now!';el.style.color='var(--red)';return;}
+  const days=Math.floor((Date.now()-new Date(last).getTime())/(1000*60*60*24));
+  if(days===0){el.innerHTML='<i class="fa-solid fa-circle-check"></i> Backed up today ✅';el.style.color='var(--grn)';}
+  else if(days<=7){el.innerHTML=`<i class="fa-solid fa-circle-check"></i> Last backup: ${days} day${days>1?'s':''} ago`;el.style.color='var(--t3)';}
+  else{el.innerHTML=`<i class="fa-solid fa-triangle-exclamation"></i> Last backup: ${days} days ago — please backup now!`;el.style.color='var(--red)';}
+}
+function expBkp(){
+  // Export full Supabase data snapshot
+  const b={
+    version:'v6',
+    exportedAt:new Date().toISOString(),
+    appVersion:'v6.4',
+    sales:S.sales,
+    saleItems:S.sItems,
+    purchases:S.purch,
+    purchaseItems:S.pItems,
+    invoices:S.invs.map(i=>({...i,_pays:undefined})), // exclude runtime data
+    payments:S.pays,
+    expenses:S.exps,
+    drafts:S.drafts,
+    prices:S.prices,
+    customers:S.custs,
+    suppliers:S.sups,
+    clients:S.clients
+  };
+  const json=JSON.stringify(b,null,2);
+  const u=URL.createObjectURL(new Blob([json],{type:'application/json'}));
+  const a=document.createElement('a');
+  a.href=u;
+  a.download=`LeeAndTY_backup_${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(u);
+  localStorage.setItem('lty_last_backup',new Date().toISOString());
+  showBkpStatus();
+  toast(`Backup saved — ${S.sales.length} sales, ${S.purch.length} purchases, ${S.prices.length} prices`,'ok');
+}
+
+async function importBackup(input){
+  if(!input.files||!input.files[0])return;
+  const file=input.files[0];
+  input.value=''; // reset so same file can be picked again
+  let b;
+  try{b=JSON.parse(await file.text());}
+  catch(e){toast('Invalid backup file','err');return;}
+
+  // Detect format
+  const isV6 = b.version==='v6'||b.version===3;
+  const isV18 = b.version==='v18';
+  if(!isV6&&!isV18){toast('Unrecognised backup format','err');return;}
+
+  const sales=b.sales||[];
+  const purchases=b.purchases||[];
+  const saleItems=b.saleItems||[];
+  const purchItems=b.purchaseItems||[];
+  const expenses=b.expenses||[];
+  const prices=b.prices||[];
+  const customers=b.customers||[];
+  const suppliers=b.suppliers||[];
+  const clients=b.clients||[];
+
+  const summary=`${sales.length} sales · ${purchases.length} purchases · ${expenses.length} expenses · ${prices.length} prices`;
+  if(!confirm(`Restore backup from ${b.exportedAt?.split('T')[0]||'unknown date'}?\n\n${summary}\n\nExisting records with the same ID will be skipped (safe to import multiple times).`))return;
+
+  const btn=document.querySelector('label:has([onchange="importBackup(this)"])');
+  const origText=btn?.innerHTML;
+  if(btn){btn.innerHTML='<span class="spin"></span> Importing...';}
+  toast('Importing backup...','ok');
+
+  const uid=S.user?.id;
+
+  try{
+    // Helper: chunk array
+    const chk=(arr,n)=>{const r=[];for(let i=0;i<arr.length;i+=n)r.push(arr.slice(i,i+n));return r;};
+
+    // 1. Customers
+    if(customers.length){
+      for(const c of chk(customers,50))
+        await sb.from('market_customers').upsert(c.map(x=>({id:x.id,name:x.name,phone:x.phone||null,address:x.address||null})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    // 2. Suppliers
+    if(suppliers.length){
+      for(const c of chk(suppliers,50))
+        await sb.from('suppliers').upsert(c.map(x=>({id:x.id,name:x.name,phone:x.phone||null,address:x.address||null})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    // 3. Clients
+    if(clients.length){
+      for(const c of chk(clients,50))
+        await sb.from('clients').upsert(c.map(x=>({id:x.id,name:x.name,email:x.email||null,phone:x.phone||null,address:x.address||null})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    // 4. Prices
+    if(prices.length){
+      for(const c of chk(prices,50))
+        await sb.from('prices').upsert(c.map(x=>({id:x.id,user_id:x.user_id||uid,name:x.name,unit:x.unit,cost_price:x.cost_price,sell_price:x.sell_price,stock_qty:x.stock_qty||0,track_stock:x.track_stock||false,default_supplier:x.default_supplier||null,active:x.active!==false})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    // 5. Sales
+    if(sales.length){
+      for(const c of chk(sales,50))
+        await sb.from('daily_sales').upsert(c.map(x=>({id:x.id,user_id:x.user_id||uid,entry_date:x.entry_date||x.date,customer_name:x.customer_name||x.customer,market_customer_id:x.market_customer_id||null,amount:x.amount,notes:x.notes||x.desc||''})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    // 6. Sale items (v6 format)
+    if(saleItems.length){
+      for(const c of chk(saleItems,100))
+        await sb.from('sale_items').upsert(c.map(x=>({id:x.id,sale_id:x.sale_id,name:x.name,uom:x.uom||'',qty:x.qty,unit_price:x.unit_price,total:x.total,sort_order:x.sort_order||0})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    // 7. Purchases
+    if(purchases.length){
+      for(const c of chk(purchases,50))
+        await sb.from('daily_purchases').upsert(c.map(x=>({id:x.id,user_id:x.user_id||uid,entry_date:x.entry_date||x.date,supplier_name:x.supplier_name||x.supplier||x.from||'',supplier_id:x.supplier_id||null,amount:x.amount,category:x.category||'Purchases - Misc',description:x.description||x.desc||'',receipt_type:x.receipt_type||'Printed Receipt',notes:x.notes||''})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    // 8. Purchase items
+    if(purchItems.length){
+      for(const c of chk(purchItems,100))
+        await sb.from('purchase_items').upsert(c.map(x=>({id:x.id,purchase_id:x.purchase_id,name:x.name,uom:x.uom||'',qty:x.qty,unit_price:x.unit_price,total:x.total,sort_order:x.sort_order||0})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    // 9. Expenses
+    if(expenses.length){
+      for(const c of chk(expenses,50))
+        await sb.from('expenses').upsert(c.map(x=>({id:x.id,user_id:x.user_id||uid,entry_date:x.entry_date||x.date,category:x.category||'Other',description:x.description||x.desc||'',amount:x.amount,notes:x.notes||''})),{onConflict:'id',ignoreDuplicates:true});
+    }
+
+    toast(`Restored: ${sales.length} sales, ${purchases.length} purchases, ${prices.length} prices ✅`,'ok');
+    await loadAll();rDash();
+  }catch(e){
+    toast('Restore error: '+e.message,'err');
+  }finally{
+    if(btn&&origText)btn.innerHTML=origText;
+  }
+}
 
 // ── WHATSAPP PDF ──
 async function shareInvWhatsApp(id){
