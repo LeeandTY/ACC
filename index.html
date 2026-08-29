@@ -284,6 +284,7 @@ textarea.inp{resize:vertical;min-height:60px}
         <button class="btn btn-pr" id="s-btn" onclick="doSaveSale()"><i class="fa-solid fa-check"></i> Record &amp; generate invoice</button>
         <button class="btn btn-sm" onclick="openATPFromForm()" title="Review items before adding to purchase drafts"><i class="fa-solid fa-cart-plus"></i> Add to drafts</button>
       </div>
+      <button class="btn btn-fw" onclick="openScanner('s')" style="margin-top:8px;background:var(--surf);border:1px solid var(--bdr)"><i class="fa-solid fa-camera" style="color:var(--br);margin-right:6px"></i>Scan Written Invoice <span style="font-size:10px;background:var(--gnl);color:var(--grn);padding:2px 6px;border-radius:8px;margin-left:4px;font-weight:700">FREE</span></button>
     </div></div>
   </div>
   <div id="s-hist" style="display:none">
@@ -428,9 +429,9 @@ textarea.inp{resize:vertical;min-height:60px}
 <div id="scan-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center">
   <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:700px;max-height:93vh;overflow-y:auto;padding:6px 16px 32px">
     <div class="mh"></div>
-    <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-camera" style="color:var(--br);margin-right:8px"></i>Scan Receipt</div><button class="m-x" onclick="closeScanner()">×</button></div>
+    <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-camera" style="color:var(--br);margin-right:8px"></i><span id="scan-title">Scan Receipt</span></div><button class="m-x" onclick="closeScanner()">×</button></div>
     <div id="scan-step1">
-      <div style="background:var(--surf);border-radius:var(--rs);padding:10px 12px;font-size:12px;color:var(--t2);margin-bottom:12px"><i class="fa-solid fa-circle-info" style="color:var(--br);margin-right:6px"></i>Take a clear photo of your receipt. AI reads the items, quantities and prices — free using Google Gemini.</div>
+      <div style="background:var(--surf);border-radius:var(--rs);padding:10px 12px;font-size:12px;color:var(--t2);margin-bottom:12px"><i class="fa-solid fa-circle-info" style="color:var(--br);margin-right:6px"></i><span id="scan-info">Take a clear photo of your receipt. AI reads the items, quantities and prices — free using Google Gemini.</span></div>
       <div id="scan-key-section" class="fld">
         <label class="lbl">Google AI Key <span style="font-weight:400;color:var(--t3)">— free, one-time setup</span></label>
         <input class="inp" type="password" id="scan-key" placeholder="AIza...">
@@ -450,7 +451,7 @@ textarea.inp{resize:vertical;min-height:60px}
     </div>
     <div id="scan-step2" style="display:none">
       <div style="background:var(--gnl);border-radius:var(--rs);padding:10px 12px;font-size:12px;color:var(--grn);margin-bottom:12px"><i class="fa-solid fa-circle-check" style="margin-right:6px"></i>Receipt read! Review and edit before adding.</div>
-      <div class="fld"><label class="lbl">Supplier</label><select class="inp" id="scan-sup"></select></div>
+      <div class="fld"><label class="lbl" id="scan-sup-lbl">Supplier</label><select class="inp" id="scan-sup"></select></div>
       <div style="font-size:13px;font-weight:700;color:var(--t2);margin:10px 0 6px">Items found</div>
       <div style="display:grid;grid-template-columns:1fr 56px 50px 70px 24px;gap:5px;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:4px;padding:0 2px"><span>Item</span><span>UOM</span><span style="text-align:right">Qty</span><span style="text-align:right">Price</span><span></span></div>
       <div id="scan-items"></div>
@@ -1816,18 +1817,33 @@ async function importBackup(input){
   }
 }
 
-// ── RECEIPT SCANNER (Google Gemini — FREE) ──
+// ── RECEIPT SCANNER (Google Gemini — FREE) — works for purchases AND handwritten sales invoices ──
 let _scanRows=[];
-function openScanner(){
+let _scanMode='p'; // 'p' = purchase receipt, 's' = handwritten sales invoice
+function openScanner(mode){
+  _scanMode=(mode==='s')?'s':'p';
   $('scan-modal').style.display='flex';document.body.style.overflow='hidden';
   $('scan-step1').style.display='block';$('scan-step2').style.display='none';
   $('scan-preview').innerHTML='';$('scan-status').style.display='none';
+  // Mode-specific labels
+  if(_scanMode==='s'){
+    $('scan-title').textContent='Scan Written Invoice';
+    $('scan-info').textContent='Take a clear photo of your handwritten invoice. AI reads customer items, quantities and prices — free using Google Gemini.';
+    $('scan-sup-lbl').textContent='Customer';
+  }else{
+    $('scan-title').textContent='Scan Receipt';
+    $('scan-info').textContent='Take a clear photo of your receipt. AI reads the items, quantities and prices — free using Google Gemini.';
+    $('scan-sup-lbl').textContent='Supplier';
+  }
   const saved=localStorage.getItem('lty_gemini_key')||'';
   $('scan-key').value=saved;
-  // Hide key section if already saved
   $('scan-key-section').style.display=saved?'none':'block';
-  // Populate supplier dropdown (saved suppliers + names from purchase history)
-  $('scan-sup').innerHTML=supOpts();
+  // Populate dropdown: suppliers for purchases, customers for sales
+  if(_scanMode==='s'){
+    $('scan-sup').innerHTML='<option value="">Customer...</option>'+S.custs.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  }else{
+    $('scan-sup').innerHTML=supOpts();
+  }
 }
 function closeScanner(){$('scan-modal').style.display='none';document.body.style.overflow='';_scanRows=[];const si=$('scan-input');if(si)si.value='';}
 function backToScan(){$('scan-step1').style.display='block';$('scan-step2').style.display='none';$('scan-preview').innerHTML='';const si=$('scan-input');if(si)si.value='';}
@@ -1854,6 +1870,9 @@ async function onScanImage(input){
   // Base64 for API
   const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('Could not read image'));r.readAsDataURL(file);});
   $('scan-status').style.display='block';
+  const prompt=_scanMode==='s'
+    ?'This is a handwritten sales invoice from a fresh produce wholesaler in Malaysia. It may contain a mix of English and Malay item names (e.g. Kangkung, Tauge, Halia, Daun Bawang). Extract ALL items sold. Return ONLY a raw JSON array, no markdown, no backticks, no explanations. Format: [{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]. Rules: qty is the quantity number; unit is the unit written (kg, pcs, pkt, ctn, box, nos etc) or empty string; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Keep the item names as written, correcting only obvious spelling.'
+    :'This is a purchase receipt from a supplier. Extract ALL items purchased. Return ONLY a raw JSON array, no markdown, no backticks, no explanations. Format: [{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]. Rules: qty is the quantity number; unit is the unit shown (kg, pcs, pkt, ctn, box, nos etc) or empty string if none; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Use the item names exactly as written on the receipt.';
   try{
     const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,{
       method:'POST',
@@ -1861,7 +1880,7 @@ async function onScanImage(input){
       body:JSON.stringify({
         contents:[{parts:[
           {inline_data:{mime_type:file.type||'image/jpeg',data:b64}},
-          {text:'This is a purchase receipt from a supplier. Extract ALL items purchased. Return ONLY a raw JSON array, no markdown, no backticks, no explanations. Format: [{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]. Rules: qty is the quantity number; unit is the unit shown (kg, pcs, pkt, ctn, box, nos etc) or empty string if none; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Use the item names exactly as written on the receipt.'}
+          {text:prompt}
         ]}],
         generationConfig:{temperature:0}
       })
@@ -1878,7 +1897,6 @@ async function onScanImage(input){
     if(!text)throw new Error('AI returned no result — try a clearer photo');
     let items;
     try{items=JSON.parse(text);}catch(_){
-      // Try extracting JSON array from surrounding text
       const m=text.match(/\[[\s\S]*\]/);
       if(!m)throw new Error('Could not read items — try a clearer photo');
       items=JSON.parse(m[0]);
@@ -1913,23 +1931,40 @@ function renderScanItems(){
 function addScanRow(){_scanRows.push({name:'',uom:'',qty:1,unit_price:0});renderScanItems();}
 function updateScanTotal(){const t=_scanRows.reduce((s,r)=>s+(r.qty||0)*(r.unit_price||0),0);$('scan-total').textContent='RM '+fmt(t);}
 function confirmScan(){
-  const sup=$('scan-sup').value;
   const rows=_scanRows.filter(r=>r.name.trim()&&r.qty>0);
   if(!rows.length){toast('No items to add','err');return;}
-  // Fill the main purchase form
-  $('p-items').innerHTML='';rc.p=0;
-  rows.forEach(r=>{
-    const row=addPurchRow();
-    fillRow(row,{name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,supplier:sup},'p');
-  });
-  recalcTot('p');
-  closeScanner();
-  // Navigate to Purchases > Record tab
-  const purchBtn=[...document.querySelectorAll('.nb')].find(b=>b.getAttribute('onclick')?.includes("'purch'"));
-  gp('purch',purchBtn);
-  const addTab=document.querySelector('#page-purch .tab');
-  if(addTab)ptab('add',addTab);
-  toast(rows.length+' items added — check supplier & prices, then Record','ok');
+  if(_scanMode==='s'){
+    // Fill the SALES form
+    const custId=$('scan-sup').value;
+    if(custId)$('s-cust').value=custId;
+    $('s-items').innerHTML='';rc.s=0;
+    rows.forEach(r=>{
+      const row=addSaleRow();
+      fillRow(row,{name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price},'s');
+    });
+    recalcTot('s');
+    closeScanner();
+    const salesBtn=[...document.querySelectorAll('.nb')].find(b=>b.getAttribute('onclick')?.includes("'sales'"));
+    gp('sales',salesBtn);
+    const addTab=document.querySelector('#page-sales .tab');
+    if(addTab)stab('add',addTab);
+    toast(rows.length+' items added — check customer & prices, then Record','ok');
+  }else{
+    // Fill the PURCHASE form
+    const sup=$('scan-sup').value;
+    $('p-items').innerHTML='';rc.p=0;
+    rows.forEach(r=>{
+      const row=addPurchRow();
+      fillRow(row,{name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,supplier:sup},'p');
+    });
+    recalcTot('p');
+    closeScanner();
+    const purchBtn=[...document.querySelectorAll('.nb')].find(b=>b.getAttribute('onclick')?.includes("'purch'"));
+    gp('purch',purchBtn);
+    const addTab=document.querySelector('#page-purch .tab');
+    if(addTab)ptab('add',addTab);
+    toast(rows.length+' items added — check supplier & prices, then Record','ok');
+  }
 }
 
 // ── WHATSAPP PDF ──
