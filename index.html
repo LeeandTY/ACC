@@ -544,7 +544,7 @@ const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 const ECATS=['Rent','Transport','Packaging','Utilities','Marketing','Salary','Other'];
 let sb,_chart,_repChart;
 const S={
-  user:null,custs:[],sups:[],clients:[],prices:[],
+  user:null,custs:[],sups:[],clients:[],prices:[],aliases:[],pAll:[],
   sales:[],sItems:[],purch:[],pItems:[],invs:[],pays:[],exps:[],drafts:[],
   eS:null,eP:null,eI:null,ePr:null,dFrom:'',dTo:'',
   cfg:{company:'Lee & TY Trading',address:'Pasar Pudu, Kuala Lumpur',phone:'',regNo:'',sstOn:false,sstRate:6,creditDays:30,terms:'',expCats:[...ECATS],itemCats:['Vegetables','Meat','Seafood','Fruits','Beverages','Frozen Food','Noodles','Dry Goods','Others']},
@@ -558,6 +558,117 @@ const lom=()=>new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISO
 const fmtD=s=>{if(!s)return'—';return new Date(s+'T00:00:00').toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric'})};
 const fmtDS=s=>{if(!s)return'—';return new Date(s+'T00:00:00').toLocaleDateString('en-MY',{day:'numeric',month:'short'})};
 const capSt=s=>({paid:'✓ Paid',unpaid:'✕ Unpaid',partial:'◑ Partial',draft:'Draft',sent:'Sent',overdue:'⚠ Overdue'}[s]||s||'—');
+
+
+// ── PRODUCT NAME MANAGER (Settings -> Product Names) ──
+let _pnQ='';
+function openProdNames(){
+  _pnQ='';
+  openM(`<div class="m-hd"><div class="m-ti"><i class="fa-solid fa-sitemap" style="color:var(--br);margin-right:8px"></i>Product Names</div><button class="m-x" onclick="closeM()">&times;</button></div>
+  <div class="fld"><input class="inp" id="pn-q" placeholder="Search master name or alias..." oninput="_pnQ=this.value;rProdNames()" autocomplete="off"></div>
+  <div id="pn-bd" style="max-height:60vh;overflow-y:auto"></div>`);
+  rProdNames();
+}
+function aliasesOf(pid){return S.aliases.filter(a=>a.product_id===pid);}
+function rProdNames(){
+  const q=normNm(_pnQ);
+  let ls=S.pAll.filter(p=>p.active!==false);
+  if(q){
+    const pids=new Set(S.aliases.filter(a=>a.alias_norm.includes(q)).map(a=>a.product_id));
+    ls=ls.filter(p=>normNm(p.name).includes(q)||pids.has(p.id));
+  }
+  ls=ls.sort((a,b)=>a.name.localeCompare(b.name)).slice(0,60);
+  if(!ls.length){$('pn-bd').innerHTML='<div class="empty"><p>No matching product.</p></div>';return;}
+  $('pn-bd').innerHTML=ls.map(p=>{
+    const al=aliasesOf(p.id).filter(a=>normNm(a.alias_raw)!==normNm(p.name));
+    return `<div style="border:1px solid var(--bdr);border-radius:var(--rs);padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="min-width:0">
+          <div style="font-weight:700">${esc(p.name)}</div>
+          <div style="font-size:11px;color:var(--t3)">${esc(p.code||'')} · ${esc(p.category||'—')} · ${esc(p.unit||'no unit')}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button class="btn btn-sm" onclick="renameMaster('${p.id}')"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn btn-sm" onclick="promptAlias('${p.id}')"><i class="fa-solid fa-plus"></i></button>
+          <button class="btn btn-sm" onclick="promptMerge('${p.id}')" title="Merge another product into this one"><i class="fa-solid fa-code-merge"></i></button>
+        </div>
+      </div>
+      <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">
+        ${al.length?al.map(a=>`<span style="background:var(--surf);border-radius:10px;padding:3px 8px;font-size:11px">${esc(a.alias_raw)} <span style="color:var(--red);cursor:pointer;font-weight:700" onclick="delAlias('${a.id}')">&times;</span></span>`).join(''):'<span style="font-size:11px;color:var(--t3)">No aliases yet</span>'}
+      </div></div>`;
+  }).join('')+(ls.length>=60?'<div style="font-size:11px;color:var(--t3);text-align:center;padding:6px">Showing first 60 — search to narrow.</div>':'');
+}
+async function renameMaster(pid){
+  const p=S.pAll.find(x=>x.id===pid); if(!p)return;
+  const nn=prompt(`Master name for this product.\n\nChanging it updates invoices, reports and autocomplete everywhere. Supplier wording stays saved as aliases.`,p.name);
+  if(nn===null)return;
+  const nm=nn.trim(); if(!nm||nm===p.name)return;
+  if(S.pAll.some(x=>x.id!==pid&&normNm(x.name)===normNm(nm))){toast('Another product already uses that name — use Merge instead','err');return;}
+  try{
+    await sb.from('prices').update({name:nm,updated_at:new Date().toISOString()}).eq('id',pid);
+    // keep the previous master name working as an alias
+    await sb.from('product_aliases').insert({product_id:pid,alias_raw:p.name,alias_norm:normNm(p.name),source:'rename'});
+    await sb.from('product_aliases').insert({product_id:pid,alias_raw:nm,alias_norm:normNm(nm),source:'master'});
+  }catch(e){/* duplicate alias is fine */}
+  await loadAll(); rProdNames();
+  toast('Renamed to '+nm,'ok');
+}
+async function promptAlias(pid){
+  const p=S.pAll.find(x=>x.id===pid); if(!p)return;
+  const a=prompt(`Add an alias for "${p.name}".\n\nAnything typed or scanned as this will show as "${p.name}".`,'');
+  if(!a)return;
+  const raw=a.trim(), n=normNm(raw); if(!n)return;
+  const ex=S.aliases.find(x=>x.alias_norm===n);
+  if(ex){
+    const owner=S.pAll.find(x=>x.id===ex.product_id);
+    toast(`"${raw}" is already mapped to ${owner?owner.name:'another product'}`,'err');return;
+  }
+  const{error}=await sb.from('product_aliases').insert({product_id:pid,alias_raw:raw,alias_norm:n,source:'manual'});
+  if(error){toast(error.message,'err');return;}
+  await loadAll(); rProdNames(); toast('Alias added','ok');
+}
+async function delAlias(aid){
+  const a=S.aliases.find(x=>x.id===aid); if(!a)return;
+  if(!confirm(`Remove alias "${a.alias_raw}"?`))return;
+  await sb.from('product_aliases').delete().eq('id',aid);
+  await loadAll(); rProdNames(); toast('Alias removed','ok');
+}
+async function promptMerge(keepId){
+  const keep=S.pAll.find(x=>x.id===keepId); if(!keep)return;
+  const q=prompt(`Merge INTO "${keep.name}".\n\nType the other product name to merge and remove. Its history and aliases move to "${keep.name}".`,'');
+  if(!q)return;
+  const from=S.pAll.find(x=>x.id!==keepId&&normNm(x.name)===normNm(q))||S.pAll.find(x=>x.id!==keepId&&normNm(x.name).includes(normNm(q)));
+  if(!from){toast('No matching product found','err');return;}
+  if(!confirm(`Merge "${from.name}" into "${keep.name}"?\n\nAll its transactions will report as "${keep.name}". This cannot be undone.`))return;
+  try{
+    await Promise.all([
+      sb.from('sale_items').update({product_id:keepId}).eq('product_id',from.id),
+      sb.from('purchase_items').update({product_id:keepId}).eq('product_id',from.id),
+      sb.from('invoice_items').update({product_id:keepId}).eq('product_id',from.id),
+      sb.from('product_aliases').update({product_id:keepId}).eq('product_id',from.id),
+    ]);
+    await sb.from('prices').update({active:false}).eq('id',from.id);
+  }catch(e){toast(e.message,'err');return;}
+  await loadAll(); rProdNames(); toast(`Merged into ${keep.name}`,'ok');
+}
+
+// ── MASTER PRODUCT NAME RESOLUTION ──
+const normNm=s=>String(s??'').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g,' ').trim();
+const stripUom=s=>String(s??'').replace(/\s*\([^)]*\)\s*$/,'');
+function resolveP(name){
+  const n=normNm(stripUom(name)); if(!n)return null;
+  const a=S.aliases.find(x=>x.alias_norm===n);
+  if(a){const p=S.pAll.find(x=>x.id===a.product_id); if(p)return p;}
+  return S.pAll.find(p=>normNm(p.name)===n)||null;
+}
+const pidOf=name=>{const p=resolveP(name);return p?p.id:null;};
+// Master (customer-facing) name for a saved line item. Original text is never overwritten.
+function mName(it,field){
+  if(it&&it.product_id){const p=S.pAll.find(x=>x.id===it.product_id); if(p)return p.name;}
+  const raw=(it&&it[field||'name'])||'';
+  const r=resolveP(raw);
+  return r?r.name:String(raw);
+}
 const sumAmt=arr=>arr.reduce((t,r)=>t+Number(r.amount||0),0);
 
 let _tt;
@@ -604,7 +715,7 @@ function saveCfg(){localStorage.setItem('lty_cfg',JSON.stringify(S.cfg));toast('
 
 async function loadAll(){
   const uid=S.user.id;
-  const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr]=await Promise.all([
+  const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr,al,pall]=await Promise.all([
     sb.from('market_customers').select('*').order('name'),
     sb.from('suppliers').select('*').order('name'),
     sb.from('clients').select('*').order('name'),
@@ -617,11 +728,13 @@ async function loadAll(){
     sb.from('prices').select('*').eq('active',true).order('name'),
     sb.from('expenses').select('*').order('entry_date',{ascending:false}),
     sb.from('purchase_drafts').select('*').order('created_at'),
+    sb.from('product_aliases').select('*'),
+    sb.from('prices').select('id,name,unit,category,code,active'),
   ]);
   S.custs=cu.data||[];S.sups=su.data||[];S.clients=cl.data||[];
   S.sales=sa.data||[];S.sItems=si.data||[];
   S.purch=pu.data||[];S.pItems=pi.data||[];
-  S.pays=pa.data||[];S.prices=pr.data||[];S.exps=ex.data||[];S.drafts=dr.data||[];
+  S.aliases=al.data||[];S.pAll=pall.data||[];S.pays=pa.data||[];S.prices=pr.data||[];S.exps=ex.data||[];S.drafts=dr.data||[];
   S.invs=(iv.data||[]).map(inv=>{const pp=(pa.data||[]).filter(x=>x.invoice_id===inv.id);const pd=pp.reduce((t,x)=>t+Number(x.amount),0);let st=inv.status||'unpaid';if(pp.length)st=pd>=Number(inv.total)?'paid':'partial';return{...inv,_pays:pp,_paid:pd,status:st};});
   fillSels();
 }
@@ -902,7 +1015,9 @@ function recalcTot(t){
 function onAC(inp,type){
   const q=inp.value.trim().toLowerCase();const drop=inp.nextElementSibling;
   if(!q){drop.style.display='none';return;}
-  const hits=S.prices.filter(p=>p.name.toLowerCase().includes(q)).slice(0,8);
+  const nq=normNm(q);
+  const aliasPids=new Set(S.aliases.filter(a=>a.alias_norm.includes(nq)).map(a=>a.product_id));
+  const hits=S.prices.filter(p=>p.name.toLowerCase().includes(q)||aliasPids.has(p.id)).slice(0,8);
   if(!hits.length){drop.style.display='none';return;}
   drop.innerHTML=hits.map(p=>{
     const isSaleType=(type==='sale'||type==='es');
@@ -988,11 +1103,11 @@ async function doSaveSale(){
           const tax=S.cfg.sstOn?S.cfg.sstRate:0;const taxAmt=total*(tax/100);const invTotal=total+taxAmt;
           const{data:inv,error:invErr}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cliId,invoice_number:num,status:'draft',issue_date:d.entry_date,due_date:due||null,tax_rate:tax,subtotal:total,tax_amount:taxAmt,total:invTotal,notes:S.cfg.terms||''}).select().single();
           if(invErr)throw invErr;
-          if(inv&&rows.length)await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,sort_order:i})));
+          if(inv&&rows.length)await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name),sort_order:i})));
         }catch(e){console.warn('Invoice auto-create failed:',e);toast('Sale saved but invoice failed: '+e.message,'err');}
       }
     }
-    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,sort_order:i})));
+    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,product_id:pidOf(r.name),sort_order:i})));
     rows.forEach(r=>{const p=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(p&&r.unit_price>0)sb.from('prices').update({sell_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',p.id).then();});
     toast('Sale recorded!','ok');
     logAct('create',`Sale: ${d.customer_name} — RM ${fmt(total)} (${d.entry_date})`);
@@ -1083,7 +1198,7 @@ async function saveEditedSale(){
     // Update sale record and items
     await sb.from('daily_sales').update({entry_date:saleDate,customer_name:cn,market_customer_id:cid,amount:total,notes:$('es-notes').value||desc}).eq('id',_eS);
     await sb.from('sale_items').delete().eq('sale_id',_eS);
-    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,sort_order:i})));
+    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name),sort_order:i})));
     // Update prices learn
     rows.forEach(r=>{const p=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(p&&r.unit_price>0)sb.from('prices').update({sell_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',p.id).then();});
     // Sync invoice if one exists for this sale (match by client + date)
@@ -1096,7 +1211,7 @@ async function saveEditedSale(){
         const invTotal=total+taxAmt;
         await sb.from('invoices').update({subtotal:total,tax_amount:taxAmt,total:invTotal}).eq('id',inv.id);
         await sb.from('invoice_items').delete().eq('invoice_id',inv.id);
-        await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,sort_order:i})));
+        await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name),sort_order:i})));
         toast('Sale + invoice updated!','ok');
       }else{toast('Sale updated!','ok');}
     }else{toast('Sale updated!','ok');}
@@ -1136,7 +1251,7 @@ function rSH(){
   ls.forEach(s=>{
     if(s.entry_date!==last){const dt=ls.filter(x=>x.entry_date===s.entry_date);html+=`<div class="day-hd"><span>${fmtD(s.entry_date)}</span><span style="color:var(--grn)">RM ${fmt(sumAmt(dt))}</span></div>`;last=s.entry_date;}
     const si=getSI(s.id);
-    const dr=si.length?si.map(r=>`${r.name} x${r.qty}${r.uom?' '+r.uom:''}`).join(', '):(s.notes||'');
+    const dr=si.length?si.map(r=>`${mName(r)} x${r.qty}${r.uom?' '+r.uom:''}`).join(', '):(s.notes||'');
     html+=`<div class="tx"><div class="tx-l"><div class="tx-nm">${esc(s.customer_name||'?')}</div><div class="tx-sb">${esc(dr.substring(0,70))}${dr.length>70?'…':''}</div></div>
     <div style="text-align:right"><div class="tx-am g">RM ${fmt(s.amount)}</div><div class="tx-acts" style="justify-content:flex-end"><button class="btn btn-sm" onclick="editSale('${s.id}')"><i class="fa-solid fa-pen"></i> Edit</button><button class="btn btn-sm" onclick="openATPFromSale('${s.id}')" title="Add to purchase drafts"><i class="fa-solid fa-cart-plus"></i></button><button class="btn btn-rd btn-sm btn-ic" onclick="delSale('${s.id}')"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
   });
@@ -1159,7 +1274,7 @@ async function doSavePurch(){
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('p-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('p-ref').value||''}).select().single();
       if(error)throw error;
-      await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,sort_order:i})));
+      await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name),sort_order:i})));
       srows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(pr){if(r.unit_price>0)sb.from('prices').update({cost_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',pr.id).then();}else if(r.name){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
     }
     toast('Purchase recorded!','ok');
@@ -1202,7 +1317,7 @@ async function saveEditedPurch(){
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('ep-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('ep-notes').value||''}).select().single();
       if(error)throw error;
-      await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,sort_order:i})));
+      await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name),sort_order:i})));
       srows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(pr&&r.unit_price>0)sb.from('prices').update({cost_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',pr.id).then();});
     }
     logAct('edit',`Purchase edited: ${rows.map(r=>r.supplier).filter((v,i,a)=>a.indexOf(v)===i).join(', ')}`);
@@ -1234,7 +1349,7 @@ function rPH(){
   let html='',last='';
   ls.forEach(p=>{
     if(p.entry_date!==last){const dt=ls.filter(x=>x.entry_date===p.entry_date);html+=`<div class="day-hd"><span>${fmtD(p.entry_date)}</span><span style="color:var(--red)">RM ${fmt(sumAmt(dt))}</span></div>`;last=p.entry_date;}
-    const pi=getPI(p.id);const dr=pi.length?pi.map(r=>`${r.name} x${r.qty}${r.uom?' '+r.uom:''}`).join(', '):(p.description||'');
+    const pi=getPI(p.id);const dr=pi.length?pi.map(r=>`${mName(r)} x${r.qty}${r.uom?' '+r.uom:''}`).join(', '):(p.description||'');
     html+=`<div class="tx"><div class="tx-l"><div class="tx-nm">${esc(p.supplier_name||'?')}</div><div class="tx-sb">${esc(dr.substring(0,70))}${dr.length>70?'…':''}${p.notes?' · '+esc(p.notes):''}</div></div>
     <div style="text-align:right"><div class="tx-am r">RM ${fmt(p.amount)}</div><div class="tx-acts" style="justify-content:flex-end"><button class="btn btn-sm" onclick="editPurch('${p.id}')"><i class="fa-solid fa-pen"></i> Edit</button><button class="btn btn-rd btn-sm btn-ic" onclick="delPurch('${p.id}')"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
   });
@@ -1285,7 +1400,7 @@ async function confirmDrafts(){
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:d,supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes}).select().single();
       if(error)throw error;
-      if(p)await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,sort_order:i})));
+      if(p)await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name),sort_order:i})));
     }
     for(const r of rows)await sb.from('purchase_drafts').delete().eq('id',r.id);
     toast('Purchase created from drafts!','ok');await loadAll();rDfts();fillSels();
@@ -1317,7 +1432,7 @@ function openInvForm(eid){
   const co='<option value="">Select client *</option>'+S.clients.map(c=>`<option value="${c.id}"${inv?.client_id===c.id?' selected':''}>${esc(c.name)}</option>`).join('');
   const so=['draft','sent','partial','paid','overdue'].map(s=>`<option value="${s}"${inv?.status===s||(!inv&&s==='draft')?' selected':''}>${capSt(s)}</option>`).join('');
   const items=inv?.items||[{description:'',quantity:1,unit_price:0}];
-  const ih=items.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(it=>`<div class="line-row"><input class="inp sm" placeholder="Description" value="${esc(it.description||'')}" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Qty" value="${it.quantity||1}" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Price" value="${it.unit_price||0}" step="0.01" oninput="calcIT()"><button class="dx" onclick="this.parentElement.remove();calcIT()">×</button></div>`).join('');
+  const ih=items.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(it=>`<div class="line-row"><input class="inp sm" placeholder="Description" value="${esc(mName(it,'description'))}" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Qty" value="${it.quantity||1}" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Price" value="${it.unit_price||0}" step="0.01" oninput="calcIT()"><button class="dx" onclick="this.parentElement.remove();calcIT()">×</button></div>`).join('');
   openM(`<div class="m-hd"><div class="m-ti">${inv?'Edit Invoice':'New Invoice'}</div><button class="m-x" onclick="closeM()">×</button></div>
   <div class="fld"><label class="lbl">Client *</label><select class="inp" id="mi-cl">${co}</select></div>
   <div class="r2"><div class="fld"><label class="lbl">Issue Date</label><input class="inp" type="date" id="mi-dt" value="${inv?.issue_date||today()}"></div><div class="fld"><label class="lbl">Due Date</label><input class="inp" type="date" id="mi-dd" value="${inv?.due_date||''}"></div></div>
@@ -1340,13 +1455,13 @@ async function submitInv(){
     if(S.eI){
       await sb.from('invoices').update({client_id:cid,issue_date:$('mi-dt').value,due_date:$('mi-dd').value||null,status:$('mi-st').value,tax_rate:tx,subtotal:sub,tax_amount:ta,total:sub+ta,notes:$('mi-nt').value}).eq('id',S.eI);
       await sb.from('invoice_items').delete().eq('invoice_id',S.eI);
-      if(its.length)await sb.from('invoice_items').insert(its.map((it,i)=>({invoice_id:S.eI,...it,sort_order:i})));
+      if(its.length)await sb.from('invoice_items').insert(its.map((it,i)=>({invoice_id:S.eI,...it,product_id:pidOf(it.description),sort_order:i})));
       toast('Updated','ok');
     }else{
       const{data:num}=await sb.rpc('next_invoice_number');
       const{data:inv,error}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cid,invoice_number:num,status:$('mi-st').value,issue_date:$('mi-dt').value,due_date:$('mi-dd').value||null,tax_rate:tx,subtotal:sub,tax_amount:ta,total:sub+ta,notes:$('mi-nt').value}).select().single();
       if(error)throw error;
-      if(its.length)await sb.from('invoice_items').insert(its.map((it,i)=>({invoice_id:inv.id,...it,sort_order:i})));
+      if(its.length)await sb.from('invoice_items').insert(its.map((it,i)=>({invoice_id:inv.id,...it,product_id:pidOf(it.description),sort_order:i})));
       toast('Created','ok');
     }
     closeM();await loadAll();rInv();
@@ -1362,7 +1477,7 @@ function viewInv(id){
     <div><div style="font-weight:700;font-size:15px;color:var(--t1)">${esc(inv.client?.name||'?')}</div><div style="font-size:12px;color:var(--t3);margin-top:3px">${fmtD(inv.issue_date)}${inv.due_date?' · Due '+fmtD(inv.due_date):''}</div></div>
     <div style="text-align:right"><div style="font-size:22px;font-weight:800;color:var(--t1)">RM ${fmt(inv.total)}</div><span class="bdg b-${inv.status}">${capSt(inv.status)}</span></div>
   </div>
-  ${its.length?`<div class="tw"><table class="tbl" style="margin-bottom:14px"><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th></tr></thead><tbody>${its.map(it=>`<tr><td>${esc(it.description)}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">RM ${fmt(it.quantity*it.unit_price)}</td></tr>`).join('')}</tbody><tfoot><tr style="background:var(--surf)"><td colspan="3" style="text-align:right;font-weight:700">Total</td><td class="n" style="font-weight:800">RM ${fmt(inv.total)}</td></tr></tfoot></table></div>`:''}
+  ${its.length?`<div class="tw"><table class="tbl" style="margin-bottom:14px"><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th></tr></thead><tbody>${its.map(it=>`<tr><td>${esc(mName(it,'description'))}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">RM ${fmt(it.quantity*it.unit_price)}</td></tr>`).join('')}</tbody><tfoot><tr style="background:var(--surf)"><td colspan="3" style="text-align:right;font-weight:700">Total</td><td class="n" style="font-weight:800">RM ${fmt(inv.total)}</td></tr></tfoot></table></div>`:''}
   ${inv.notes?`<div style="font-size:12px;color:var(--t3);padding:10px;background:var(--surf);border-radius:var(--rs);margin-bottom:14px">${esc(inv.notes)}</div>`:''}
   <div style="margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px"><i class="fa-solid fa-money-bill-wave" style="color:var(--grn);margin-right:5px"></i>Payments</div>
@@ -1406,7 +1521,7 @@ function printInv(id){
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${inv.invoice_number}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:36px;max-width:800px;margin:0 auto}.hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;padding-bottom:16px;border-bottom:3px solid #E07B2A}.cn{font-size:18px;font-weight:700;color:#E07B2A}.in{font-size:26px;font-weight:800;color:#E07B2A}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f5f5f5;padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd}td{padding:9px 12px;border-bottom:1px solid #eee}.n{text-align:right}.tots{max-width:260px;margin-left:auto}.tr{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}.gd{font-size:16px;font-weight:800;color:#E07B2A;border-top:2px solid #E07B2A;padding-top:8px;margin-top:4px}.ft{margin-top:28px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999}.bt{margin-bottom:24px}.lbs{font-size:10px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:4px}@media print{body{padding:16px}}</style></head><body>
   <div class="hd"><div><div class="cn">${esc(p.company||'L&TY Trading')}</div><div style="font-size:12px;color:#555;margin-top:3px">${esc(p.address||'')}</div>${p.phone?`<div style="font-size:12px;color:#555">${esc(p.phone)}</div>`:''} ${p.regNo?`<div style="font-size:12px;color:#555">Reg: ${esc(p.regNo)}</div>`:''}</div><div style="text-align:right"><div class="in">${esc(inv.invoice_number)}</div><div style="font-size:12px;color:#555;margin-top:4px">Date: ${fmtD(inv.issue_date)}</div>${inv.due_date?`<div style="font-size:12px;color:#c00">Due: ${fmtD(inv.due_date)}</div>`:''}</div></div>
   <div class="bt"><div class="lbs">Bill To</div><div style="font-weight:700;font-size:14px">${esc(inv.client?.name||'')}</div>${inv.client?.address?`<div style="color:#555;font-size:12px;margin-top:2px">${esc(inv.client.address)}</div>`:''} ${inv.client?.email?`<div style="color:#555;font-size:12px">${esc(inv.client.email)}</div>`:''}</div>
-  <table><thead><tr><th>Description</th><th class="n">Qty</th><th class="n">Unit Price</th><th class="n">Amount</th></tr></thead><tbody>${its.map(it=>`<tr><td>${esc(it.description)}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">RM ${fmt(it.quantity*it.unit_price)}</td></tr>`).join('')}</tbody></table>
+  <table><thead><tr><th>Description</th><th class="n">Qty</th><th class="n">Unit Price</th><th class="n">Amount</th></tr></thead><tbody>${its.map(it=>`<tr><td>${esc(mName(it,'description'))}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">RM ${fmt(it.quantity*it.unit_price)}</td></tr>`).join('')}</tbody></table>
   <div class="tots"><div class="tr"><span>Subtotal</span><span>RM ${fmt(sub)}</span></div>${tx>0?`<div class="tr"><span>SST (${tx}%)</span><span>RM ${fmt(ta)}</span></div>`:''}<div class="tr gd"><span>TOTAL DUE</span><span>RM ${fmt(tot)}</span></div></div>
   ${inv.notes?`<div class="ft"><strong>Terms:</strong> ${esc(inv.notes)}</div>`:''}
   <div class="ft" style="margin-top:16px">Thank you for your business.</div>
@@ -1651,6 +1766,11 @@ function rSet(){
   <div class="card-bd" style="padding-top:8px">${S.sups.map(x=>`<div class="cat-row"><span style="color:var(--t1)">${esc(x.name)}</span><button class="btn btn-rd btn-sm btn-ic" onclick="delSupplier('${x.id}')"><i class="fa-solid fa-trash"></i></button></div>`).join('')||'<div style="color:var(--t3);font-size:13px;padding:4px 0">No suppliers yet</div>'}</div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-pen-to-square"></i>Rename Item</span></div><div class="card-bd"><button class="btn btn-fw" onclick="openRenameModal()"><i class="fa-solid fa-pen"></i> Rename an item in the price list</button></div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-palette"></i>Appearance</span></div><div class="card-bd"><button class="btn btn-fw" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i> Toggle Dark / Light Mode</button></div></div>
+  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-tags"></i>Product Names</span></div><div class="card-bd">
+    <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Control the one official name shown on invoices and reports. Supplier and staff wording is kept underneath as aliases.</div>
+    <button class="btn btn-fw" onclick="openProdNames()"><i class="fa-solid fa-sitemap" style="color:var(--br);margin-right:6px"></i>Manage Product Names &amp; Aliases</button>
+  </div></div>
+
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-database"></i>Data &amp; Export</span></div><div class="card-bd">
     <div id="bkp-status" style="font-size:12px;color:var(--t3);margin-bottom:8px;text-align:center"></div>
     <button class="btn btn-pr btn-fw" onclick="expBkp()" style="margin-bottom:8px"><i class="fa-solid fa-download"></i> Export Backup (JSON)</button>
@@ -1917,12 +2037,17 @@ async function onScanImage(input){
       items=JSON.parse(m[0]);
     }
     if(!Array.isArray(items)||!items.length)throw new Error('No items found — try a clearer photo');
-    _scanRows=items.map(i=>({
-      name:String(i.name||'').trim(),
+    _scanRows=items.map(i=>{
+      const rawNm=String(i.name||'').trim();
+      const mp=resolveP(rawNm);
+      return{
+      name:mp?mp.name:rawNm,
+      _raw:rawNm,
+      _matched:!!mp,
       uom:String(i.unit||i.uom||'').trim(),
       qty:parseFloat(i.qty)||1,
       unit_price:parseFloat(i.price)||0
-    })).filter(r=>r.name);
+    };}).filter(r=>r.name);
     renderScanItems();
     $('scan-step1').style.display='none';$('scan-step2').style.display='block';
   }catch(e){
@@ -2096,7 +2221,7 @@ async function shareInvWhatsApp(id){
       doc.setFontSize(8);doc.setTextColor(150,150,150);
       doc.text(String(idx+1),ML+3,y+5);
       doc.setTextColor(30,30,30);doc.setFontSize(9);
-      const desc=String(it.description||'').substring(0,45);
+      const desc=String(mName(it,'description')||'').substring(0,45);
       doc.text(desc,ML+11,y+5);
       const qtyStr=Number(it.quantity)%1===0?String(Number(it.quantity)):Number(it.quantity).toFixed(2);
       doc.text(qtyStr,MR-55,y+5,{align:'right'});
