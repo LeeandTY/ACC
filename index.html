@@ -1874,25 +1874,30 @@ async function onScanImage(input){
     ?'This is a handwritten sales invoice from a fresh produce wholesaler in Malaysia. It may contain a mix of English and Malay item names (e.g. Kangkung, Tauge, Halia, Daun Bawang). Extract ALL items sold. Return ONLY a raw JSON array, no markdown, no backticks, no explanations. Format: [{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]. Rules: qty is the quantity number; unit is the unit written (kg, pcs, pkt, ctn, box, nos etc) or empty string; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Keep the item names as written, correcting only obvious spelling.'
     :'This is a purchase receipt from a supplier. Extract ALL items purchased. Return ONLY a raw JSON array, no markdown, no backticks, no explanations. Format: [{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]. Rules: qty is the quantity number; unit is the unit shown (kg, pcs, pkt, ctn, box, nos etc) or empty string if none; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Use the item names exactly as written on the receipt.';
   try{
-    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        contents:[{parts:[
-          {inline_data:{mime_type:file.type||'image/jpeg',data:b64}},
-          {text:prompt}
-        ]}],
-        generationConfig:{temperature:0}
-      })
-    });
-    if(!resp.ok){
+    // Try current models in order — Google retires old models periodically
+    const models=['gemini-3.6-flash','gemini-3.5-flash','gemini-2.5-flash'];
+    let data=null,lastErr='';
+    for(const model of models){
+      const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          contents:[{parts:[
+            {inline_data:{mime_type:file.type||'image/jpeg',data:b64}},
+            {text:prompt}
+          ]}],
+          generationConfig:{temperature:0}
+        })
+      });
+      if(resp.ok){data=await resp.json();break;}
       const errBody=await resp.json().catch(()=>({}));
       const msg=errBody?.error?.message||`HTTP ${resp.status}`;
       if(resp.status===400&&/API key/i.test(msg))throw new Error('Invalid API key — check and paste again');
       if(resp.status===429)throw new Error('Daily free limit reached — try again tomorrow');
+      if(resp.status===404||/not found|deprecated|not supported/i.test(msg)){lastErr=msg;continue;} // try next model
       throw new Error(msg);
     }
-    const data=await resp.json();
+    if(!data)throw new Error(lastErr||'No available model — contact support');
     const text=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').trim().replace(/```json|```/g,'').trim();
     if(!text)throw new Error('AI returned no result — try a clearer photo');
     let items;
