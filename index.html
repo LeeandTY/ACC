@@ -745,7 +745,8 @@ function getPI(pid){return S.pItems.filter(x=>x.purchase_id===pid).sort((a,b)=>a
 function fillSels(){
   const cu='<option value="">Select...</option>'+S.custs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
   if($('s-cust'))$('s-cust').innerHTML=cu;
-  const su='<option value="">Select supplier...</option>'+S.sups.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  const supNames=[...new Set([...S.sups.map(s=>s.name),...S.purch.map(p=>p.supplier_name).filter(Boolean)])].sort();
+  const su='<option value="">Select supplier...</option>'+supNames.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
   if($('p-repeat'))$('p-repeat').innerHTML=su;
   const ec=S.cfg.expCats.map(c=>`<option>${esc(c)}</option>`).join('');
   if($('e-cat'))$('e-cat').innerHTML=ec;
@@ -1330,8 +1331,7 @@ function getEPRows(){
 }
 async function delPurch(id){if(!confirm('Delete?'))return;await sb.from('purchase_items').delete().eq('purchase_id',id);await sb.from('daily_purchases').delete().eq('id',id);toast('Deleted');await loadAll();rPH();}
 function doRepeat(){
-  const sid=$('p-repeat').value;if(!sid)return;
-  const sup=S.sups.find(s=>s.id===sid)?.name;if(!sup)return;
+  const sup=$('p-repeat').value;if(!sup)return;
   const last=S.purch.filter(p=>p.supplier_name===sup).sort((a,b)=>b.entry_date.localeCompare(a.entry_date))[0];
   if(!last){toast('No previous purchase from this supplier','err');return;}
   const pi=getPI(last.id);
