@@ -406,6 +406,14 @@ textarea.inp{resize:vertical;min-height:60px}
 
 <!-- REPORTS -->
 <div id="page-rep" class="page">
+  <div class="card" style="margin-bottom:14px"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-clipboard-check"></i>Daily Check</span></div><div class="card-bd">
+    <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Compare what you bought against what you sold on one day. Bulk buys that last several days are normal &mdash; mark those as stock to clear them.</div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div class="fld" style="margin:0;flex:1"><label class="lbl">Date</label><input class="inp sm" type="date" id="rc-date" onchange="rRecon()"></div>
+      <button class="btn btn-pr btn-sm" onclick="rRecon()"><i class="fa-solid fa-magnifying-glass"></i> Check</button>
+    </div>
+    <div id="rc-bd" style="margin-top:10px"></div>
+  </div></div>
   <div class="card" style="margin-bottom:14px"><div class="card-bd" style="padding:12px 14px">
     <div class="rpills">
       <button class="rpill" onclick="setRepRange('today',this)">Today</button>
@@ -544,7 +552,7 @@ const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 const ECATS=['Rent','Transport','Packaging','Utilities','Marketing','Salary','Other'];
 let sb,_chart,_repChart;
 const S={
-  user:null,custs:[],sups:[],clients:[],prices:[],aliases:[],pAll:[],
+  user:null,custs:[],sups:[],clients:[],prices:[],aliases:[],pAll:[],recon:[],
   sales:[],sItems:[],purch:[],pItems:[],invs:[],pays:[],exps:[],drafts:[],
   eS:null,eP:null,eI:null,ePr:null,dFrom:'',dTo:'',
   cfg:{company:'Lee & TY Trading',address:'Pasar Pudu, Kuala Lumpur',phone:'',regNo:'',sstOn:false,sstRate:6,creditDays:30,terms:'',expCats:[...ECATS],itemCats:['Vegetables','Meat','Seafood','Fruits','Beverages','Frozen Food','Noodles','Dry Goods','Others']},
@@ -715,7 +723,7 @@ function saveCfg(){localStorage.setItem('lty_cfg',JSON.stringify(S.cfg));toast('
 
 async function loadAll(){
   const uid=S.user.id;
-  const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr,al,pall]=await Promise.all([
+  const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr,al,pall,rm]=await Promise.all([
     sb.from('market_customers').select('*').order('name'),
     sb.from('suppliers').select('*').order('name'),
     sb.from('clients').select('*').order('name'),
@@ -730,11 +738,12 @@ async function loadAll(){
     sb.from('purchase_drafts').select('*').order('created_at'),
     sb.from('product_aliases').select('*'),
     sb.from('prices').select('id,name,unit,category,code,active'),
+    sb.from('recon_marks').select('*'),
   ]);
   S.custs=cu.data||[];S.sups=su.data||[];S.clients=cl.data||[];
   S.sales=sa.data||[];S.sItems=si.data||[];
   S.purch=pu.data||[];S.pItems=pi.data||[];
-  S.aliases=al.data||[];S.pAll=pall.data||[];S.pays=pa.data||[];S.prices=pr.data||[];S.exps=ex.data||[];S.drafts=dr.data||[];
+  S.aliases=al.data||[];S.pAll=pall.data||[];S.recon=rm.data||[];S.pays=pa.data||[];S.prices=pr.data||[];S.exps=ex.data||[];S.drafts=dr.data||[];
   S.invs=(iv.data||[]).map(inv=>{const pp=(pa.data||[]).filter(x=>x.invoice_id===inv.id);const pd=pp.reduce((t,x)=>t+Number(x.amount),0);let st=inv.status||'unpaid';if(pp.length)st=pd>=Number(inv.total)?'paid':'partial';return{...inv,_pays:pp,_paid:pd,status:st};});
   fillSels();
 }
@@ -761,7 +770,7 @@ function fillSels(){
 async function doSync(){$('sync-ic').className='fa-solid fa-arrows-rotate fa-spin';await loadAll();const pg=document.querySelector('.page.on')?.id?.replace('page-','');if(pg)rPage(pg);$('sync-ic').className='fa-solid fa-arrows-rotate';toast('Refreshed','ok');}
 
 function gp(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));$('page-'+id).classList.add('on');btn?.classList.add('on');rPage(id);}
-function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}rRep();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();},50);}}
+function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}if($('rc-date')&&!$('rc-date').value)$('rc-date').value=today();rRep();rRecon();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();},50);}}
 function stab(t,btn){$('s-add').style.display=t==='add'?'block':'none';$('s-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#page-sales .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rSH();}
 function ptab(t,btn){['add','hist','exp','dft'].forEach(k=>$('p-'+k).style.display=t===k?'block':'none');document.querySelectorAll('#page-purch .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rPH();else if(t==='exp')rEH();else if(t==='dft')rDfts();}
 function etab(t,btn){$('exp-add').style.display=t==='add'?'block':'none';$('exp-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#p-exp .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rEH();}
@@ -1645,6 +1654,78 @@ function setRepRange(k,btn){
   $('rp-f').value=rFrom;$('rp-t').value=rTo;
   document.querySelectorAll('#page-rep .rpill').forEach(b=>b.classList.remove('on'));btn?.classList.add('on');
   rRep();
+}
+// ── DAILY CHECK: purchases vs sales, by master product ──
+function reconData(d){
+  const pIds=new Set(S.purch.filter(p=>p.entry_date===d).map(p=>p.id));
+  const sIds=new Set(S.sales.filter(s=>s.entry_date===d).map(s=>s.id));
+  const agg={};
+  const add=(pid,fallback,uom,qty,side)=>{
+    if(!pid&&!fallback)return;
+    const key=pid||('~'+normNm(fallback));
+    if(!agg[key])agg[key]={pid,name:pid?(S.pAll.find(x=>x.id===pid)||{}).name||fallback:fallback,bought:0,sold:0,bUom:'',sUom:''};
+    agg[key][side]+=Number(qty)||0;
+    if(side==='bought'&&uom)agg[key].bUom=uom; else if(side==='sold'&&uom)agg[key].sUom=uom;
+  };
+  S.pItems.filter(i=>pIds.has(i.purchase_id)).forEach(i=>add(i.product_id,i.name,i.uom,i.qty,'bought'));
+  S.sItems.filter(i=>sIds.has(i.sale_id)).forEach(i=>add(i.product_id,i.name,i.uom,i.qty,'sold'));
+  return Object.values(agg);
+}
+function isMarked(d,pid){return S.recon.some(r=>r.entry_date===d&&r.product_id===pid);}
+function rRecon(){
+  const d=$('rc-date')?.value; const bd=$('rc-bd'); if(!bd)return;
+  if(!d){bd.innerHTML='<div style="font-size:12px;color:var(--t3);padding:6px 0">Pick a date to check.</div>';return;}
+  const rows=reconData(d);
+  if(!rows.length){bd.innerHTML='<div class="empty" style="padding:14px"><p>No purchase or sale line items recorded on '+fmtD(d)+'.</p></div>';return;}
+  const unsold=rows.filter(r=>r.bought>0&&r.sold===0&&!(r.pid&&isMarked(d,r.pid)));
+  const partial=rows.filter(r=>r.bought>0&&r.sold>0);
+  const marked=rows.filter(r=>r.pid&&isMarked(d,r.pid)&&r.bought>0&&r.sold===0);
+  const soldOnly=rows.filter(r=>r.bought===0&&r.sold>0);
+  let h='';
+  h+=`<div style="display:flex;gap:8px;margin-bottom:10px">
+    <div style="flex:1;background:var(--surf);border-radius:var(--rs);padding:8px;text-align:center"><div style="font-size:18px;font-weight:800;color:${unsold.length?'var(--red)':'var(--grn)'}">${unsold.length}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase">To review</div></div>
+    <div style="flex:1;background:var(--surf);border-radius:var(--rs);padding:8px;text-align:center"><div style="font-size:18px;font-weight:800">${partial.length}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase">Bought &amp; sold</div></div>
+    <div style="flex:1;background:var(--surf);border-radius:var(--rs);padding:8px;text-align:center"><div style="font-size:18px;font-weight:800;color:var(--t3)">${marked.length}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase">Stock</div></div>
+  </div>`;
+  const line=(r,tag)=>{
+    const unitWarn=(r.bought>0&&r.sold>0&&r.bUom&&r.sUom&&r.bUom!==r.sUom)?` <span style="color:var(--br);font-size:10px">units differ</span>`:'';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">
+      <div style="min-width:0;flex:1">
+        <div style="font-weight:600;font-size:13px">${esc(r.name)}${r.pid?'':' <span style="color:var(--br);font-size:10px">unmapped</span>'}${unitWarn}</div>
+        <div style="font-size:11px;color:var(--t3)">Bought ${r.bought}${r.bUom?' '+esc(r.bUom):''} · Sold ${r.sold}${r.sUom?' '+esc(r.sUom):''}</div>
+      </div>
+      ${tag==='unsold'?`<div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn btn-sm" onclick="reconToSale('${esc(r.name).replace(/'/g,"&#39;")}','${esc(r.bUom||'')}',${r.bought})" title="Key this into a sale">Sale</button>
+        ${r.pid?`<button class="btn btn-sm" onclick="reconMark('${d}','${r.pid}')" title="Leftover stock, not a mistake">Stock</button>`:''}
+      </div>`:''}
+      ${tag==='marked'&&r.pid?`<button class="btn btn-sm" onclick="reconUnmark('${d}','${r.pid}')">Undo</button>`:''}
+    </div>`;
+  };
+  if(unsold.length){h+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--red);margin:10px 0 4px">Bought but not sold</div>`+unsold.map(r=>line(r,'unsold')).join('');}
+  else{h+=`<div style="background:var(--gnl);color:var(--grn);border-radius:var(--rs);padding:10px;font-size:12px;margin-bottom:8px"><i class="fa-solid fa-circle-check" style="margin-right:6px"></i>Nothing left to review for this day.</div>`;}
+  if(soldOnly.length){h+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--t3);margin:14px 0 4px">Sold without a purchase that day (from stock)</div>`+soldOnly.map(r=>line(r,'sold')).join('');}
+  if(partial.length){h+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--t3);margin:14px 0 4px">Bought and sold</div>`+partial.map(r=>line(r,'both')).join('');}
+  if(marked.length){h+=`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--t3);margin:14px 0 4px">Marked as stock</div>`+marked.map(r=>line(r,'marked')).join('');}
+  bd.innerHTML=h;
+}
+async function reconMark(d,pid){
+  const{error}=await sb.from('recon_marks').insert({entry_date:d,product_id:pid,mark:'stock'});
+  if(error&&!/duplicate/i.test(error.message)){toast(error.message,'err');return;}
+  await loadAll();rRecon();toast('Marked as stock','ok');
+}
+async function reconUnmark(d,pid){
+  await sb.from('recon_marks').delete().eq('entry_date',d).eq('product_id',pid);
+  await loadAll();rRecon();toast('Moved back to review','ok');
+}
+function reconToSale(name,uom,qty){
+  const salesBtn=[...document.querySelectorAll('.nb')].find(b=>b.getAttribute('onclick')?.includes("'sales'"));
+  gp('sales',salesBtn);
+  const addTab=document.querySelector('#page-sales .tab'); if(addTab)stab('add',addTab);
+  const d=$('rc-date')?.value; if(d&&$('s-date'))$('s-date').value=d;
+  const row=addSaleRow();
+  fillRow(row,{name:name,uom:uom,qty:qty,unit_price:(resolveP(name)||{}).sell_price||0,total:0},'s');
+  recalcTot('s');
+  toast('Added to the sale form — pick the customer and check the price','ok');
 }
 function rRep(){
   rFrom=$('rp-f')?.value||fom();rTo=$('rp-t')?.value||today();
