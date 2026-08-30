@@ -1946,8 +1946,10 @@ async function importBackup(input){
 // ── RECEIPT SCANNER (Google Gemini — FREE) — works for purchases AND handwritten sales invoices ──
 let _scanRows=[];
 let _scanMode='p'; // 'p' = purchase receipt, 's' = handwritten sales invoice
+let _scanSup='';   // supplier name read off the receipt
 function openScanner(mode){
   _scanMode=(mode==='s')?'s':'p';
+  _scanSup='';
   $('scan-modal').style.display='flex';document.body.style.overflow='hidden';
   $('scan-step1').style.display='block';$('scan-step2').style.display='none';
   $('scan-preview').innerHTML='';$('scan-status').style.display='none';
@@ -2002,7 +2004,7 @@ async function onScanImage(input){
   $('scan-status').style.display='block';
   const prompt=_scanMode==='s'
     ?'This is a handwritten sales invoice from a fresh produce wholesaler in Malaysia. It may contain a mix of English and Malay item names (e.g. Kangkung, Tauge, Halia, Daun Bawang). Extract ALL items sold. Return ONLY a raw JSON array, no markdown, no backticks, no explanations. Format: [{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]. Rules: qty is the quantity number; unit is the unit written (kg, pcs, pkt, ctn, box, nos etc) or empty string; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Keep the item names as written, correcting only obvious spelling.'
-    :'This is a purchase receipt from a supplier. Extract ALL items purchased. Return ONLY a raw JSON array, no markdown, no backticks, no explanations. Format: [{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]. Rules: qty is the quantity number; unit is the unit shown (kg, pcs, pkt, ctn, box, nos etc) or empty string if none; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Use the item names exactly as written on the receipt.';
+    :'This is a purchase receipt from a supplier in Malaysia. Extract the SUPPLIER/SHOP NAME and ALL items purchased. Return ONLY a raw JSON object, no markdown, no backticks, no explanations. Format: {"supplier":"Shop Name","items":[{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]}. Rules for supplier: use the business/shop/trading name printed at the top of the receipt (e.g. "Boon Yee", "33 Noodles & Sprouts", "NSK"). Ignore addresses, phone numbers, registration numbers and words like RECEIPT, INVOICE, BILL, TAX INVOICE. If the receipt shows no business name at all (a plain handwritten cash slip), return "" for supplier. Rules for items: qty is the quantity number; unit is the unit shown (kg, pcs, pkt, ctn, box, nos etc) or empty string if none; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Use the item names exactly as written on the receipt.';
   try{
     // Try current models in order — Google retires old models periodically
     const models=['gemini-3.6-flash','gemini-3.5-flash','gemini-2.5-flash'];
@@ -2030,13 +2032,16 @@ async function onScanImage(input){
     if(!data)throw new Error(lastErr||'No available model — contact support');
     const text=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').trim().replace(/```json|```/g,'').trim();
     if(!text)throw new Error('AI returned no result — try a clearer photo');
-    let items;
-    try{items=JSON.parse(text);}catch(_){
-      const m=text.match(/\[[\s\S]*\]/);
-      if(!m)throw new Error('Could not read items — try a clearer photo');
-      items=JSON.parse(m[0]);
+    let parsed;
+    try{parsed=JSON.parse(text);}catch(_){
+      const mo=text.match(/\{[\s\S]*\}/), ma=text.match(/\[[\s\S]*\]/);
+      const src=(mo&&ma)?(mo.index<ma.index?mo[0]:ma[0]):(mo?mo[0]:(ma?ma[0]:null));
+      if(!src)throw new Error('Could not read items — try a clearer photo');
+      parsed=JSON.parse(src);
     }
-    if(!Array.isArray(items)||!items.length)throw new Error('No items found — try a clearer photo');
+    let items=Array.isArray(parsed)?parsed:(parsed&&Array.isArray(parsed.items)?parsed.items:null);
+    if(!items||!items.length)throw new Error('No items found — try a clearer photo');
+    _scanSup=(!Array.isArray(parsed)&&parsed.supplier)?String(parsed.supplier).trim():'';
     _scanRows=items.map(i=>{
       const rawNm=String(i.name||'').trim();
       const mp=resolveP(rawNm);
@@ -2049,6 +2054,7 @@ async function onScanImage(input){
       unit_price:parseFloat(i.price)||0
     };}).filter(r=>r.name);
     renderScanItems();
+    if(_scanMode==='p')applyScanSupplier();
     $('scan-step1').style.display='none';$('scan-step2').style.display='block';
   }catch(e){
     toast('Scan failed: '+e.message,'err');
@@ -2056,6 +2062,30 @@ async function onScanImage(input){
     $('scan-status').style.display='none';
     input.value='';
   }
+}
+// Match the scanned supplier to an existing one, or queue it as new. No name = Cash Bill.
+function applyScanSupplier(){
+  const sel=$('scan-sup'); if(!sel)return;
+  const lbl=$('scan-sup-lbl');
+  const known=[...new Set([...S.sups.map(s=>s.name),...S.purch.map(p=>p.supplier_name).filter(Boolean)])];
+  const n=normNm(_scanSup);
+  let pick='', isNew=false;
+  if(!n){
+    pick=known.find(s=>normNm(s)==='cash bill')||'Cash Bill';
+    if(!known.some(s=>normNm(s)===normNm(pick)))isNew=true;
+  }else{
+    let hit=known.find(s=>normNm(s)===n)
+        ||known.find(s=>normNm(s).includes(n)||n.includes(normNm(s)));
+    if(hit){pick=hit;}else{pick=_scanSup;isNew=true;}
+  }
+  if(isNew&&![...sel.options].some(o=>o.value===pick)){
+    const o=document.createElement('option');o.value=pick;o.textContent=pick+' (new)';sel.appendChild(o);
+  }
+  sel.value=pick;
+  if(lbl)lbl.innerHTML='Supplier '+(isNew
+    ?'<span style="font-weight:400;color:var(--br)">— new, will be saved</span>'
+    :(!n?'<span style="font-weight:400;color:var(--t3)">— no shop name found, using Cash Bill</span>'
+        :'<span style="font-weight:400;color:var(--grn)">— matched from receipt</span>'));
 }
 function renderScanItems(){
   $('scan-items').innerHTML=_scanRows.map((r,i)=>`
@@ -2092,6 +2122,10 @@ function confirmScan(){
   }else{
     // Fill the PURCHASE form
     const sup=$('scan-sup').value;
+    // Persist a brand-new supplier so it is selectable next time
+    if(sup&&!S.sups.some(s=>normNm(s.name)===normNm(sup))){
+      sb.from('suppliers').insert({name:sup}).then(({error})=>{if(!error)loadAll();});
+    }
     $('p-items').innerHTML='';rc.p=0;
     rows.forEach(r=>{
       const row=addPurchRow();
