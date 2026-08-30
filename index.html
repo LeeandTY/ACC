@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
-  --br:#E07B2A;--brd:#C4611A;--brl:#FFF4EC;
+  --br:#2E7D32;--brd:#1B5E20;--brl:#E8F5E9;
   --bg:#F4F5F8;--card:#FFF;--surf:#F0F2F6;
   --t1:#111827;--t2:#374151;--t3:#6B7280;--t4:#9CA3AF;
   --bdr:#E5E7EB;--bdr2:#D1D5DB;
@@ -31,7 +31,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--t1);padding-bottom:72px;-webkit-tap-highlight-color:transparent;transition:background .2s,color .2s}
 input,select,textarea,button{font-family:inherit;font-size:14px;color:var(--t1)}
-#topbar{position:sticky;top:0;z-index:100;background:var(--br);display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:54px;box-shadow:0 2px 10px rgba(224,123,42,.4)}
+#topbar{position:sticky;top:0;z-index:100;background:var(--br);display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:54px;box-shadow:0 2px 10px rgba(46,125,50,.4)}
 [data-theme="dark"] #topbar{background:#1B1F2E;box-shadow:0 2px 8px rgba(0,0,0,.5)}
 .tb-lo h1{font-size:16px;font-weight:800;color:#fff}
 .tb-lo small{font-size:11px;color:rgba(255,255,255,.75);display:block;margin-top:1px}
@@ -1518,7 +1518,7 @@ function printInv(id){
   const its=(inv.items||[]).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   const sub=its.reduce((s,i)=>s+Number(i.quantity)*Number(i.unit_price),0),tx=Number(inv.tax_rate||0),ta=sub*(tx/100),tot=sub+ta,p=S.cfg;
   const w=window.open('','_blank','width=820,height=640');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${inv.invoice_number}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:36px;max-width:800px;margin:0 auto}.hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;padding-bottom:16px;border-bottom:3px solid #E07B2A}.cn{font-size:18px;font-weight:700;color:#E07B2A}.in{font-size:26px;font-weight:800;color:#E07B2A}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f5f5f5;padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd}td{padding:9px 12px;border-bottom:1px solid #eee}.n{text-align:right}.tots{max-width:260px;margin-left:auto}.tr{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}.gd{font-size:16px;font-weight:800;color:#E07B2A;border-top:2px solid #E07B2A;padding-top:8px;margin-top:4px}.ft{margin-top:28px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999}.bt{margin-bottom:24px}.lbs{font-size:10px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:4px}@media print{body{padding:16px}}</style></head><body>
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${inv.invoice_number}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:36px;max-width:800px;margin:0 auto}.hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;padding-bottom:16px;border-bottom:3px solid #2E7D32}.cn{font-size:18px;font-weight:700;color:#2E7D32}.in{font-size:26px;font-weight:800;color:#2E7D32}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f5f5f5;padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd}td{padding:9px 12px;border-bottom:1px solid #eee}.n{text-align:right}.tots{max-width:260px;margin-left:auto}.tr{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}.gd{font-size:16px;font-weight:800;color:#2E7D32;border-top:2px solid #2E7D32;padding-top:8px;margin-top:4px}.ft{margin-top:28px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999}.bt{margin-bottom:24px}.lbs{font-size:10px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:4px}@media print{body{padding:16px}}</style></head><body>
   <div class="hd"><div><div class="cn">${esc(p.company||'L&TY Trading')}</div><div style="font-size:12px;color:#555;margin-top:3px">${esc(p.address||'')}</div>${p.phone?`<div style="font-size:12px;color:#555">${esc(p.phone)}</div>`:''} ${p.regNo?`<div style="font-size:12px;color:#555">Reg: ${esc(p.regNo)}</div>`:''}</div><div style="text-align:right"><div class="in">${esc(inv.invoice_number)}</div><div style="font-size:12px;color:#555;margin-top:4px">Date: ${fmtD(inv.issue_date)}</div>${inv.due_date?`<div style="font-size:12px;color:#c00">Due: ${fmtD(inv.due_date)}</div>`:''}</div></div>
   <div class="bt"><div class="lbs">Bill To</div><div style="font-weight:700;font-size:14px">${esc(inv.client?.name||'')}</div>${inv.client?.address?`<div style="color:#555;font-size:12px;margin-top:2px">${esc(inv.client.address)}</div>`:''} ${inv.client?.email?`<div style="color:#555;font-size:12px">${esc(inv.client.email)}</div>`:''}</div>
   <table><thead><tr><th>Description</th><th class="n">Qty</th><th class="n">Unit Price</th><th class="n">Amount</th></tr></thead><tbody>${its.map(it=>`<tr><td>${esc(mName(it,'description'))}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">RM ${fmt(it.quantity*it.unit_price)}</td></tr>`).join('')}</tbody></table>
@@ -1615,7 +1615,7 @@ async function doRename(){
 function exportPriceListPDF(){
   const p=S.cfg;
   const cats=[...new Set(S.prices.map(x=>x.category).filter(Boolean))].sort();
-  let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Price List</title><style>body{font-family:Arial,sans-serif;font-size:12px;padding:28px;max-width:700px;margin:0 auto}h1{font-size:18px;font-weight:700;color:#E07B2A;margin-bottom:4px}.sub{color:#666;font-size:12px;margin-bottom:20px}h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#555;margin:16px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}table{width:100%;border-collapse:collapse;margin-bottom:12px}th{background:#f5f5f5;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd}td{padding:7px 10px;border-bottom:1px solid #eee;font-size:12px}.n{text-align:right}.ft{font-size:10px;color:#999;margin-top:20px}@media print{body{padding:10px}}</style></head><body>
+  let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Price List</title><style>body{font-family:Arial,sans-serif;font-size:12px;padding:28px;max-width:700px;margin:0 auto}h1{font-size:18px;font-weight:700;color:#2E7D32;margin-bottom:4px}.sub{color:#666;font-size:12px;margin-bottom:20px}h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#555;margin:16px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}table{width:100%;border-collapse:collapse;margin-bottom:12px}th{background:#f5f5f5;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd}td{padding:7px 10px;border-bottom:1px solid #eee;font-size:12px}.n{text-align:right}.ft{font-size:10px;color:#999;margin-top:20px}@media print{body{padding:10px}}</style></head><body>
   <h1>${esc(p.company||'L&TY Trading')} — Price List</h1><div class="sub">Generated: ${new Date().toLocaleDateString('en-MY')} · ${S.prices.length} items</div>`;
   if(cats.length){
     cats.forEach(cat=>{
@@ -2158,7 +2158,7 @@ async function shareInvWhatsApp(id){
     let y=0,page=1;
 
     const drawFooter=()=>{
-      doc.setFillColor(224,123,42);doc.rect(0,PH-FOOTER_H,W,FOOTER_H,'F');
+      doc.setFillColor(46,125,50);doc.rect(0,PH-FOOTER_H,W,FOOTER_H,'F');
       doc.setTextColor(255,255,255);doc.setFontSize(7);doc.setFont('helvetica','normal');
       doc.text(`${p.company||'L&TY Trading'} · ${inv.invoice_number} · Page ${page}`,W/2,PH-FOOTER_H+8,{align:'center'});
     };
@@ -2170,7 +2170,7 @@ async function shareInvWhatsApp(id){
     const checkY=(needed=10)=>{if(y+needed>MARGIN_BOT)addPage();};
 
     const drawTableHeader=()=>{
-      doc.setFillColor(224,123,42);doc.rect(ML,y,MR-ML,8,'F');
+      doc.setFillColor(46,125,50);doc.rect(ML,y,MR-ML,8,'F');
       doc.setTextColor(255,255,255);doc.setFontSize(8);doc.setFont('helvetica','bold');
       doc.text('#',ML+3,y+5.5);
       doc.text('Description',ML+11,y+5.5);
@@ -2181,7 +2181,7 @@ async function shareInvWhatsApp(id){
     };
 
     // ── PAGE 1 HEADER ──
-    doc.setFillColor(224,123,42);doc.rect(0,0,W,36,'F');
+    doc.setFillColor(46,125,50);doc.rect(0,0,W,36,'F');
     doc.setTextColor(255,255,255);doc.setFontSize(18);doc.setFont('helvetica','bold');
     doc.text(p.company||'L&TY Trading',ML,14);
     doc.setFontSize(8);doc.setFont('helvetica','normal');
@@ -2275,7 +2275,7 @@ async function shareInvWhatsApp(id){
     const totW=80,totX=MR-totW;
     const addTotRow=(label,val,bold,rgb)=>{
       checkY(10);
-      if(bold){doc.setFillColor(224,123,42);doc.rect(totX,y-1,totW,9,'F');doc.setTextColor(255,255,255);}
+      if(bold){doc.setFillColor(46,125,50);doc.rect(totX,y-1,totW,9,'F');doc.setTextColor(255,255,255);}
       else{doc.setTextColor(rgb||[80,80,80]);}
       doc.setFontSize(bold?10:9);doc.setFont('helvetica',bold?'bold':'normal');
       doc.text(label,totX+3,y+5);
@@ -2335,7 +2335,7 @@ function printMonthly(yrParam,moParam){
   const w=window.open('','_blank','width=750,height=650');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Monthly Report ${mName}</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:12px;padding:28px;max-width:750px;margin:0 auto}
-  .hd{background:#E07B2A;color:#fff;padding:16px 20px;border-radius:8px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+  .hd{background:#2E7D32;color:#fff;padding:16px 20px;border-radius:8px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
   .hd h1{font-size:18px;font-weight:800}.hd p{font-size:11px;opacity:.85}
   .summary{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:20px}
   .sm{border:1px solid #eee;border-radius:8px;padding:12px;text-align:center}
@@ -2400,7 +2400,7 @@ function printTax(yrParam){
   const p=S.cfg;
   const w=window.open('','_blank','width=750,height=650');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tax ${yr}</title>
-  <style>body{font-family:Arial,sans-serif;font-size:12px;padding:32px;max-width:750px;margin:0 auto}h1{font-size:20px;font-weight:800;color:#E07B2A;margin-bottom:4px}h2{font-size:13px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}.sub{color:#666;font-size:12px;margin-bottom:24px}.summary{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:24px}.sm{background:#f9f9f9;border:1px solid #ddd;border-radius:8px;padding:12px;text-align:center}.sm .lbl{font-size:10px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:6px}.sm .val{font-size:18px;font-weight:800}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#f5f5f5;padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd}td{padding:8px 10px;border-bottom:1px solid #eee;font-size:12px}.n{text-align:right}tfoot tr{background:#f0f0f0;font-weight:700}.note{font-size:10px;color:#999;margin-top:24px;border-top:1px solid #eee;padding-top:12px}@media print{body{padding:10px}.sm{page-break-inside:avoid}}</style></head><body>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;padding:32px;max-width:750px;margin:0 auto}h1{font-size:20px;font-weight:800;color:#2E7D32;margin-bottom:4px}h2{font-size:13px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}.sub{color:#666;font-size:12px;margin-bottom:24px}.summary{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:24px}.sm{background:#f9f9f9;border:1px solid #ddd;border-radius:8px;padding:12px;text-align:center}.sm .lbl{font-size:10px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:6px}.sm .val{font-size:18px;font-weight:800}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#f5f5f5;padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd}td{padding:8px 10px;border-bottom:1px solid #eee;font-size:12px}.n{text-align:right}tfoot tr{background:#f0f0f0;font-weight:700}.note{font-size:10px;color:#999;margin-top:24px;border-top:1px solid #eee;padding-top:12px}@media print{body{padding:10px}.sm{page-break-inside:avoid}}</style></head><body>
   <h1>Year-End Tax Summary</h1>
   <div class="sub">${esc(p.company)} · Financial Year ${yr}${p.regNo?' · Reg: '+esc(p.regNo):''}</div>
   <div class="summary">
