@@ -578,16 +578,83 @@ function openProdNames(){
   rProdNames();
 }
 function aliasesOf(pid){return S.aliases.filter(a=>a.product_id===pid);}
+// Raw names sitting on transactions that resolve to no master product
+function unmappedNames(){
+  const m={};
+  const add=(nm,uom,src)=>{const k=normNm(nm); if(!k)return;
+    if(!m[k])m[k]={name:nm,uom:uom||'',n:0,src:new Set()};
+    m[k].n++; m[k].src.add(src); if(uom&&!m[k].uom)m[k].uom=uom;};
+  S.sItems.filter(i=>!i.product_id).forEach(i=>add(i.name,i.uom,'sale'));
+  S.pItems.filter(i=>!i.product_id).forEach(i=>add(i.name,i.uom,'purchase'));
+  return Object.values(m).sort((a,b)=>b.n-a.n);
+}
+async function linkAlias(rawName,pid){
+  const n=normNm(rawName);
+  const ex=S.aliases.find(x=>x.alias_norm===n);
+  if(!ex){
+    const{error}=await sb.from('product_aliases').insert({product_id:pid,alias_raw:rawName,alias_norm:n,source:'manual'});
+    if(error){toast(error.message,'err');return false;}
+  }else if(ex.product_id!==pid){
+    await sb.from('product_aliases').update({product_id:pid}).eq('id',ex.id);
+  }
+  // attach every existing transaction line that used this wording
+  const sIds=S.sItems.filter(i=>!i.product_id&&normNm(i.name)===n).map(i=>i.id);
+  const pIds=S.pItems.filter(i=>!i.product_id&&normNm(i.name)===n).map(i=>i.id);
+  if(sIds.length)await sb.from('sale_items').update({product_id:pid}).in('id',sIds);
+  if(pIds.length)await sb.from('purchase_items').update({product_id:pid}).in('id',pIds);
+  return true;
+}
+async function mapUnmapped(rawName){
+  const sug=suggestMaster(rawName);
+  const ans=prompt(`Map "${rawName}" to which master product?\n\nType the master name exactly, or leave blank to cancel.`, sug?sug.name:'');
+  if(!ans)return;
+  const target=S.pAll.find(p=>p.active!==false&&normNm(p.name)===normNm(ans))
+            ||S.pAll.find(p=>p.active!==false&&normNm(p.name).includes(normNm(ans)));
+  if(!target){toast('No master product with that name — use "New" to create one','err');return;}
+  if(!confirm(`"${rawName}"  ->  "${target.name}"\n\nAll past and future records using this wording will report as "${target.name}".`))return;
+  if(await linkAlias(rawName,target.id)){await loadAll();rProdNames();toast('Mapped to '+target.name,'ok');}
+}
+async function newFromUnmapped(rawName,uom){
+  const nm=prompt(`Create a new master product.\n\nOfficial name to use on invoices and reports:`,rawName);
+  if(!nm||!nm.trim())return;
+  const name=nm.trim();
+  if(S.pAll.some(p=>normNm(p.name)===normNm(name))){toast('That product already exists — use Map instead','err');return;}
+  const{data,error}=await sb.from('prices').insert({name,unit:uom||'',cost_price:0,sell_price:0,active:true,category:'Vegetable'}).select().single();
+  if(error){toast(error.message,'err');return;}
+  await sb.from('product_aliases').insert({product_id:data.id,alias_raw:name,alias_norm:normNm(name),source:'master'});
+  await linkAlias(rawName,data.id);
+  await loadAll();rProdNames();toast('Created '+name,'ok');
+}
 function rProdNames(){
   const q=normNm(_pnQ);
+  // Unmapped wording needing attention (always shown first, ignores the search box)
+  const um=unmappedNames();
+  let umHtml='';
+  if(um.length){
+    umHtml=`<div style="border:1px solid var(--br);border-radius:var(--rs);padding:10px;margin-bottom:12px">
+      <div style="font-weight:700;font-size:13px;color:var(--br);margin-bottom:2px"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>${um.length} name${um.length>1?'s':''} not mapped yet</div>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:8px">These were typed or scanned but match no master product, so they will not tally in reports.</div>
+      ${um.map(u=>{
+        const s=suggestMaster(u.name);
+        const safe=esc(u.name).replace(/'/g,'&#39;');
+        return `<div style="padding:8px 0;border-top:1px solid var(--bdr)">
+          <div style="font-weight:600;font-size:13px">${esc(u.name)}</div>
+          <div style="font-size:11px;color:var(--t3);margin-bottom:5px">${u.n} record${u.n>1?'s':''} · ${[...u.src].join(' + ')}${u.uom?' · '+esc(u.uom):''}${s?` · suggests <b>${esc(s.name)}</b>`:''}</div>
+          <div style="display:flex;gap:5px">
+            <button class="btn btn-sm" onclick="mapUnmapped('${safe}')"><i class="fa-solid fa-link"></i> Map</button>
+            <button class="btn btn-sm" onclick="newFromUnmapped('${safe}','${esc(u.uom)}')"><i class="fa-solid fa-plus"></i> New product</button>
+          </div></div>`;
+      }).join('')}
+    </div>`;
+  }
   let ls=S.pAll.filter(p=>p.active!==false);
   if(q){
     const pids=new Set(S.aliases.filter(a=>a.alias_norm.includes(q)).map(a=>a.product_id));
     ls=ls.filter(p=>normNm(p.name).includes(q)||pids.has(p.id));
   }
   ls=ls.sort((a,b)=>a.name.localeCompare(b.name)).slice(0,60);
-  if(!ls.length){$('pn-bd').innerHTML='<div class="empty"><p>No matching product.</p></div>';return;}
-  $('pn-bd').innerHTML=ls.map(p=>{
+  if(!ls.length){$('pn-bd').innerHTML=umHtml+'<div class="empty"><p>No matching product.</p></div>';return;}
+  $('pn-bd').innerHTML=umHtml+ls.map(p=>{
     const al=aliasesOf(p.id).filter(a=>normNm(a.alias_raw)!==normNm(p.name));
     return `<div style="border:1px solid var(--bdr);border-radius:var(--rs);padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
@@ -670,6 +737,32 @@ function resolveP(name){
   return S.pAll.find(p=>normNm(p.name)===n)||null;
 }
 const pidOf=name=>{const p=resolveP(name);return p?p.id:null;};
+// Looser key for supplier/scanner wording: drop brackets, slashed alternatives, pack sizes
+function looseNm(s){
+  let t=String(s??'');
+  t=t.replace(/\([^)]*\)/g,' ');                       // (Per pkt), (32), (罐)
+  t=t.replace(/\b(per|pcs|pkt|ctn|kg|g|ml|l|tin|pack|tong|box|nos|btl)\b/gi,' ');
+  t=t.replace(/\d+(\.\d+)?\s*(x\s*\d+(\.\d+)?)?/gi,' ');   // 1kg, 12X1.5
+  return normNm(t);
+}
+// Suggest a master product for an unknown name. Never applied automatically.
+function suggestMaster(name){
+  const cands=[];
+  const parts=String(name??'').split('/').map(x=>looseNm(x)).filter(x=>x.length>2);
+  const whole=looseNm(name); if(whole.length>2)parts.push(whole);
+  if(!parts.length)return null;
+  let best=null,bestLen=0;
+  S.pAll.filter(p=>p.active!==false).forEach(p=>{
+    const pn=normNm(p.name); if(pn.length<3)return;
+    parts.forEach(part=>{
+      if(part===pn||part.includes(pn)||pn.includes(part)){
+        const score=Math.min(pn.length,part.length);
+        if(score>bestLen){bestLen=score;best=p;}
+      }
+    });
+  });
+  return best;
+}
 // Master (customer-facing) name for a saved line item. Original text is never overwritten.
 function mName(it,field){
   if(it&&it.product_id){const p=S.pAll.find(x=>x.id===it.product_id); if(p)return p.name;}
@@ -1111,7 +1204,7 @@ async function doSaveSale(){
           const{data:num}=await sb.rpc('next_invoice_number');
           const due=S.cfg.creditDays>0?new Date(Date.now()+S.cfg.creditDays*86400000).toISOString().slice(0,10):'';
           const tax=S.cfg.sstOn?S.cfg.sstRate:0;const taxAmt=total*(tax/100);const invTotal=total+taxAmt;
-          const{data:inv,error:invErr}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cliId,invoice_number:num,status:'draft',issue_date:d.entry_date,due_date:due||null,tax_rate:tax,subtotal:total,tax_amount:taxAmt,total:invTotal,notes:S.cfg.terms||''}).select().single();
+          const{data:inv,error:invErr}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cliId,invoice_number:num,status:'sent',issue_date:d.entry_date,due_date:due||null,tax_rate:tax,subtotal:total,tax_amount:taxAmt,total:invTotal,notes:S.cfg.terms||''}).select().single();
           if(invErr)throw invErr;
           if(inv&&rows.length)await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name),sort_order:i})));
         }catch(e){console.warn('Invoice auto-create failed:',e);toast('Sale saved but invoice failed: '+e.message,'err');}
@@ -1490,12 +1583,16 @@ function viewInv(id){
   ${inv.notes?`<div style="font-size:12px;color:var(--t3);padding:10px;background:var(--surf);border-radius:var(--rs);margin-bottom:14px">${esc(inv.notes)}</div>`:''}
   <div style="margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px"><i class="fa-solid fa-money-bill-wave" style="color:var(--grn);margin-right:5px"></i>Payments</div>
-    ${(inv._pays||[]).map(p=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bdr);font-size:13px"><span style="color:var(--t3)">${fmtD(p.payment_date)}</span><div><span style="font-weight:700;color:var(--grn)">RM ${fmt(p.amount)}</span><button onclick="delPay('${p.id}','${id}')" style="background:none;border:none;color:var(--red);cursor:pointer;margin-left:8px;font-size:16px;vertical-align:middle">×</button></div></div>`).join('')}
+    ${(inv._pays||[]).map(p=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bdr);font-size:13px"><span style="color:var(--t3)">${fmtD(p.payment_date)} <span style="display:inline-block;background:var(--surf);border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-left:4px">${p.method==='transfer'?'<i class="fa-solid fa-building-columns" style="margin-right:3px"></i>Transfer':'<i class="fa-solid fa-money-bill" style="margin-right:3px"></i>Cash'}</span></span><div><span style="font-weight:700;color:var(--grn)">RM ${fmt(p.amount)}</span><button onclick="delPay('${p.id}','${id}')" style="background:none;border:none;color:var(--red);cursor:pointer;margin-left:8px;font-size:16px;vertical-align:middle">×</button></div></div>`).join('')}
     ${!(inv._pays||[]).length?'<div style="font-size:12px;color:var(--t3);padding:6px 0">No payments yet.</div>':''}
     ${pd>0?`<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700;font-size:13px;color:var(--t1)"><span>Balance due</span><span style="color:${bal>0?'var(--red)':'var(--grn)'}">RM ${fmt(bal)}</span></div>`:''}
     <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
       <input class="inp sm" type="date" id="pay-d" value="${today()}" style="flex:0 0 130px">
       <input class="inp sm" type="number" id="pay-a" placeholder="Amount (RM)" step="0.01" min="0" style="flex:1" value="${bal>0?bal.toFixed(2):''}">
+      <select class="inp sm" id="pay-m" style="flex:0 0 110px">
+        <option value="cash">Cash</option>
+        <option value="transfer">Transfer</option>
+      </select>
       <button class="btn btn-gn btn-sm" onclick="addPay('${id}')"><i class="fa-solid fa-plus"></i> Add</button>
     </div>
   </div>
@@ -1509,7 +1606,8 @@ function viewInv(id){
 async function addPay(iid){
   const d=$('pay-d').value,a=Number($('pay-a').value);
   if(!d||!a||a<=0){toast('Enter date and amount','err');return;}
-  const{error}=await sb.from('invoice_payments').insert({invoice_id:iid,payment_date:d,amount:a,notes:''});
+  const m=$('pay-m')?.value||'cash';
+  const{error}=await sb.from('invoice_payments').insert({invoice_id:iid,payment_date:d,amount:a,method:m,notes:''});
   if(error){toast(error.message,'err');return;}
   // Update invoice status based on total payments
   const inv=S.invs.find(i=>i.id===iid);
@@ -1518,7 +1616,7 @@ async function addPay(iid){
     const newStatus=newPaid>=Number(inv.total)?'paid':'partial';
     await sb.from('invoices').update({status:newStatus}).eq('id',iid);
   }
-  toast('Payment recorded','ok');await loadAll();rInv();viewInv(iid);
+  toast(`Payment recorded (${m==='transfer'?'Transfer':'Cash'})`,'ok');await loadAll();rInv();viewInv(iid);
 }
 async function delPay(pid,iid){if(!confirm('Remove?'))return;await sb.from('invoice_payments').delete().eq('id',pid);await loadAll();rInv();viewInv(iid);}
 async function delInv(id){if(!confirm('Delete invoice?'))return;await sb.from('invoice_payments').delete().eq('invoice_id',id);await sb.from('invoice_items').delete().eq('invoice_id',id);await sb.from('invoices').delete().eq('id',id);closeM();toast('Deleted');await loadAll();rInv();}
