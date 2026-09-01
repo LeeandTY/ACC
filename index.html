@@ -314,9 +314,10 @@ textarea.inp{resize:vertical;min-height:60px}
     <div class="card"><div class="card-bd">
       <div class="r2">
         <div class="fld"><label class="lbl">Date</label><input class="inp" type="date" id="p-date"></div>
-        <div class="fld"><label class="lbl">Quick repeat <span style="font-weight:400;color:var(--t3)">(fills last order)</span></label>
-          <div style="display:flex;gap:6px"><select class="inp sm" id="p-repeat" style="flex:1"><option value="">Select supplier...</option></select><button class="btn btn-sm" onclick="doRepeat()"><i class="fa-solid fa-clock-rotate-left"></i> Repeat</button></div>
-        </div>
+        <div class="fld"><label class="lbl">Supplier</label><select class="inp" id="p-sup"></select></div>
+      </div>
+      <div class="fld"><label class="lbl">Quick repeat <span style="font-weight:400;color:var(--t3)">(fills last order)</span></label>
+        <div style="display:flex;gap:6px"><select class="inp sm" id="p-repeat" style="flex:1"><option value="">Select supplier...</option></select><button class="btn btn-sm" onclick="doRepeat()"><i class="fa-solid fa-clock-rotate-left"></i> Repeat</button></div>
       </div>
       <div class="fld"><label class="lbl">Receipt no. / notes</label><input class="inp" id="p-ref" placeholder="e.g. Inv PD01-023660"></div>
       <hr style="border:none;border-top:1px solid var(--bdr);margin:4px 0 12px">
@@ -514,6 +515,7 @@ textarea.inp{resize:vertical;min-height:60px}
     <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-pen" style="color:var(--br);margin-right:8px"></i>Edit Purchase</div><button class="m-x" onclick="closeEditPurch()">×</button></div>
     <div class="r2">
       <div class="fld"><label class="lbl">Date</label><input class="inp" type="date" id="ep-date"></div>
+      <div class="fld"><label class="lbl">Supplier</label><select class="inp" id="ep-sup"></select></div>
       <div class="fld"><label class="lbl">Receipt / Notes</label><input class="inp" id="ep-notes" placeholder="e.g. Inv PD01-023660"></div>
     </div>
     <div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:10px"><i class="fa-solid fa-boxes-stacked" style="color:var(--br);margin-right:6px"></i>Items purchased</div>
@@ -856,7 +858,7 @@ function fillSels(){
   if($('sh-c'))$('sh-c').innerHTML='<option value="">All customers</option>'+[...new Set(S.sales.map(s=>s.customer_name).filter(Boolean))].sort().map(c=>`<option>${esc(c)}</option>`).join('');
   if($('ph-s'))$('ph-s').innerHTML='<option value="">All suppliers</option>'+[...new Set(S.purch.map(p=>p.supplier_name).filter(Boolean))].sort().map(s=>`<option>${esc(s)}</option>`).join('');
   if($('pr-cf')){const pc=[...new Set(S.prices.map(p=>p.category).filter(Boolean))].sort();$('pr-cf').innerHTML='<option value="">All cats</option>'+pc.map(c=>`<option>${esc(c)}</option>`).join('');}
-  document.querySelectorAll('.sup-sel').forEach(sel=>{const v=sel.value;sel.innerHTML=supOpts();sel.value=v;});
+  ['p-sup','ep-sup'].forEach(idd=>{const sel=$(idd);if(sel){const v=sel.value;sel.innerHTML=supOpts();if(v)sel.value=v;}});
   if(S.drafts.length){$('dft-n').textContent=S.drafts.length;$('dft-n').style.display='inline';}else{$('dft-n').style.display='none';}
 }
 
@@ -947,8 +949,7 @@ function addPurchRow(){
   const container=$('p-items');
   const div=document.createElement('div');div.className='ie-p-row';
   div.innerHTML=`<span class="rnum">${++rc.p}</span>
-  <div><div class="ac-wrap"><input type="text" placeholder="Type item..." class="name-inp" oninput="onAC(this,'purch')" onblur="hideAC(this)" autocomplete="off"><div class="ac-drop"></div></div>
-  <select class="sup-sel" style="margin-top:4px;font-size:12px;width:100%">${supOpts()}</select></div>
+  <div><div class="ac-wrap"><input type="text" placeholder="Type item..." class="name-inp" oninput="onAC(this,'purch')" onblur="hideAC(this)" autocomplete="off"><div class="ac-drop"></div></div></div>
   <input type="text" placeholder="kg/pkt" class="uom-inp" onblur="learnUOM(this,'purch')">
   <input type="number" placeholder="1" class="qty-inp" min="0" step="any" oninput="recalc(this,'p')" style="text-align:right">
   <input type="number" placeholder="0.00" class="price-inp" min="0" step="0.01" oninput="recalc(this,'p')" onblur="learnPrice(this,'purch')" style="text-align:right">
@@ -1140,7 +1141,7 @@ function selAC(e,item,type){
   if(item.dataset.uom)row.querySelector('.uom-inp').value=item.dataset.uom;
   const isSale=(type==='sale'||type==='es');const price=isSale?parseFloat(item.dataset.sell||0):parseFloat(item.dataset.cost||0);
   if(price>0)row.querySelector('.price-inp').value=price.toFixed(2);
-  if(type==='purch'&&item.dataset.sup){const sel=row.querySelector('.sup-sel');if(sel&&item.dataset.sup)sel.value=item.dataset.sup;}
+  if(type==='purch'&&item.dataset.sup&&!$('p-sup')?.value)setPurchSupplier('p-sup',item.dataset.sup);
   item.parentElement.style.display='none';
   // Trigger focus on next field for better UX
   const priceInp=row.querySelector('.price-inp');
@@ -1158,24 +1159,20 @@ function learnPrice(inp,type){
   if(p&&price>0){const isSale=(type==='sale'||type==='es');const upd=isSale?{sell_price:price}:{cost_price:price};sb.from('prices').update({...upd,updated_at:new Date().toISOString()}).eq('id',p.id).then();}
 }
 function getSaleRows(){const c=$('s-items');return[...c.querySelectorAll('.ie-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);}
-function getPurchRows(){const c=$('p-items');return[...c.querySelectorAll('.ie-p-row')].map(r=>({supplier:(r.querySelector('.sup-sel').value||'').trim(),name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);}
+function setPurchSupplier(selId,name){
+  const sel=$(selId); if(!sel||!name)return;
+  if(![...sel.options].some(o=>o.value===name)){
+    const o=document.createElement('option');o.value=name;o.textContent=name;sel.appendChild(o);
+  }
+  sel.value=name;
+}
+function getPurchRows(){const c=$('p-items');return[...c.querySelectorAll('.ie-p-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);}
 function fillRow(row,data,t){
   row.querySelector('.name-inp').value=data.name||'';
   row.querySelector('.uom-inp').value=data.uom||'';
   row.querySelector('.qty-inp').value=data.qty||'';
   row.querySelector('.price-inp').value=data.unit_price>0?data.unit_price:'';
-  if(t==='p'||t==='ep'){
-    const sel=row.querySelector('.sup-sel');
-    if(sel&&data.supplier){
-      // If supplier not in options (e.g. not in suppliers table), add it
-      if(![...sel.options].some(o=>o.value===data.supplier)){
-        const opt=document.createElement('option');
-        opt.value=data.supplier;opt.textContent=data.supplier;
-        sel.appendChild(opt);
-      }
-      sel.value=data.supplier;
-    }
-  }
+  if((t==='p'||t==='ep')&&data.supplier)setPurchSupplier(t==='ep'?'ep-sup':'p-sup',data.supplier);
   recalc(row.querySelector('.price-inp'),t);
 }
 
@@ -1264,8 +1261,7 @@ function addESRow(){
 function addEPRow(){
   const div=document.createElement('div');div.className='ie-p-row';
   div.innerHTML=`<span class="rnum">${++rc.ep}</span>
-  <div><div class="ac-wrap"><input type="text" placeholder="Type item..." class="name-inp" oninput="onAC(this,'ep')" onblur="hideAC(this)" autocomplete="off"><div class="ac-drop"></div></div>
-  <select class="sup-sel" style="margin-top:4px;font-size:12px;width:100%">${supOpts()}</select></div>
+  <div><div class="ac-wrap"><input type="text" placeholder="Type item..." class="name-inp" oninput="onAC(this,'ep')" onblur="hideAC(this)" autocomplete="off"><div class="ac-drop"></div></div></div>
   <input type="text" placeholder="kg/pkt" class="uom-inp" onblur="learnUOM(this,'ep')">
   <input type="number" placeholder="1" class="qty-inp" min="0" step="any" oninput="recalc(this,'ep')" style="text-align:right">
   <input type="number" placeholder="0.00" class="price-inp" min="0" step="0.01" oninput="recalc(this,'ep')" onblur="learnPrice(this,'ep')" style="text-align:right">
@@ -1364,15 +1360,15 @@ function rSH(){
 async function doSavePurch(){
   const btn=$('p-btn');
   const rows=getPurchRows();if(!rows.length){toast('Add at least one item','err');return;}
-  const missing=rows.find(r=>!r.supplier);if(missing){toast(`Select supplier for "${missing.name}"`,'err');return;}
+  const sup=($('p-sup')?.value||'').trim();
+  if(!sup){toast('Select the supplier for this bill','err');return;}
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   try{
     const manualPTotal=parseFloat($('p-manual-tot')?.value||0);
-    const bySup={};rows.forEach(r=>{(bySup[r.supplier]=bySup[r.supplier]||[]).push(r);});
-    const supCount=Object.keys(bySup).length;
-    for(const[sup,srows]of Object.entries(bySup)){
+    {
+      const srows=rows;
       const autoT=srows.reduce((s,r)=>s+r.total,0);
-      const total=manualPTotal>0?(supCount===1?manualPTotal:autoT):autoT;
+      const total=manualPTotal>0?manualPTotal:autoT;
       const desc=srows.map(r=>`${r.name} x${r.qty}`).join(', ');
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('p-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('p-ref').value||''}).select().single();
@@ -1381,9 +1377,9 @@ async function doSavePurch(){
       srows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(pr){if(r.unit_price>0)sb.from('prices').update({cost_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',pr.id).then();}else if(r.name){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
     }
     toast('Purchase recorded!','ok');
-    logAct('create',`Purchase: ${rows.map(r=>r.supplier).filter((v,i,a)=>a.indexOf(v)===i).join(', ')} — RM ${fmt(rows.reduce((s,r)=>s+r.total,0))} (${$('p-date').value||today()})`);
+    logAct('create',`Purchase: ${sup} — RM ${fmt(rows.reduce((s,r)=>s+r.total,0))} (${$('p-date').value||today()})`);
     // Reset form
-    $('p-items').innerHTML='';rc.p=0;$('p-ref').value='';$('p-tot').textContent='RM 0.00';$('p-manual-tot').value='';
+    $('p-items').innerHTML='';rc.p=0;$('p-ref').value='';$('p-tot').textContent='RM 0.00';$('p-manual-tot').value='';if($('p-sup'))$('p-sup').value='';
     $('p-items').innerHTML='';rc.p=0;$('p-ref').value='';$('p-tot').textContent='RM 0.00';$('p-manual-tot').value='';addPurchRow();
     closeM();await loadAll();rDash();
   }catch(e){toast(e.message,'err');}
@@ -1394,11 +1390,12 @@ let _eP=null;
 function editPurch(id){
   _eP=id;const p=S.purch.find(x=>x.id===id);if(!p)return;
   $('ep-date').value=p.entry_date;$('ep-notes').value=p.notes||'';$('ep-manual-tot').value=p.amount>0?p.amount:'';
+  setPurchSupplier('ep-sup',p.supplier_name||'');
   $('ep-items-list').innerHTML='';rc.ep=0;
   const pi=getPI(id);
   const rows=pi.length?pi.map(r=>({...r,supplier:p.supplier_name})):parseNotesToRows(p.description).map(r=>({...r,supplier:p.supplier_name}));
   if(rows.length){rows.forEach(r=>{const row=addEPRow();fillRow(row,r,'ep');});}
-  else{addEPRow();const first=$('ep-items-list').querySelector('.sup-sel');if(first)first.value=p.supplier_name;}
+  else{addEPRow();}
   recalcTot('ep');
   $('edit-purch-modal').style.display='flex';document.body.style.overflow='hidden';
 }
@@ -1406,16 +1403,16 @@ function closeEditPurch(){$('edit-purch-modal').style.display='none';document.bo
 async function saveEditedPurch(){
   const btn=$('edit-purch-modal').querySelector('.btn-pr');
   const rows=getEPRows();if(!rows.length){toast('Add at least one item','err');return;}
-  const missing=rows.find(r=>!r.supplier);if(missing){toast(`Select supplier for "${missing.name}"`,'err');return;}
+  const sup=($('ep-sup')?.value||'').trim();
+  if(!sup){toast('Select the supplier for this bill','err');return;}
   const manualTot=parseFloat($('ep-manual-tot').value||0);
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   try{
     await sb.from('daily_purchases').delete().eq('id',_eP);
     await sb.from('purchase_items').delete().eq('purchase_id',_eP);
-    const bySup={};rows.forEach(r=>{(bySup[r.supplier]=bySup[r.supplier]||[]).push(r);});
-    const supCount=Object.keys(bySup).length;
-    for(const[sup,srows]of Object.entries(bySup)){
-      const autoT=srows.reduce((s,r)=>s+r.total,0);const total=manualTot>0?(supCount===1?manualTot:autoT):autoT;
+    {
+      const srows=rows;
+      const autoT=srows.reduce((s,r)=>s+r.total,0);const total=manualTot>0?manualTot:autoT;
       const desc=srows.map(r=>`${r.name} x${r.qty}`).join(', ');
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('ep-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('ep-notes').value||''}).select().single();
@@ -1429,7 +1426,7 @@ async function saveEditedPurch(){
   finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check"></i> Save changes';}
 }
 function getEPRows(){
-  return[...$('ep-items-list').querySelectorAll('.ie-p-row')].map(r=>({supplier:(r.querySelector('.sup-sel').value||'').trim(),name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);
+  return[...$('ep-items-list').querySelectorAll('.ie-p-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);
 }
 async function delPurch(id){if(!confirm('Delete?'))return;await sb.from('purchase_items').delete().eq('purchase_id',id);await sb.from('daily_purchases').delete().eq('id',id);toast('Deleted');await loadAll();rPH();}
 function doRepeat(){
@@ -1439,7 +1436,9 @@ function doRepeat(){
   const pi=getPI(last.id);
   if(!pi.length){toast('No item data on last purchase','err');return;}
   $('p-items').innerHTML='';rc.p=0;
-  pi.forEach(r=>{const row=addPurchRow();fillRow(row,{...r,supplier:sup},'p');});
+  setPurchSupplier('p-sup',sup);
+  pi.forEach(r=>{const row=addPurchRow();fillRow(row,r,'p');});
+  recalcTot('p');
   toast('Filled from last purchase — edit as needed','ok');
 }
 function rPH(){
@@ -2306,9 +2305,10 @@ function confirmScan(){
       sb.from('suppliers').insert({name:sup}).then(({error})=>{if(!error)loadAll();});
     }
     $('p-items').innerHTML='';rc.p=0;
+    setPurchSupplier('p-sup',sup);
     rows.forEach(r=>{
       const row=addPurchRow();
-      fillRow(row,{name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,supplier:sup},'p');
+      fillRow(row,{name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price},'p');
     });
     recalcTot('p');
     closeScanner();
