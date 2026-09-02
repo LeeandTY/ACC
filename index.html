@@ -29,9 +29,10 @@
   --sh:0 1px 4px rgba(0,0,0,.3);--sh2:0 4px 20px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--t1);padding-bottom:72px;-webkit-tap-highlight-color:transparent;transition:background .2s,color .2s}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--t1);padding-left:62px;padding-bottom:64px;-webkit-tap-highlight-color:transparent;transition:background .2s,color .2s}
 input,select,textarea,button{font-family:inherit;font-size:14px;color:var(--t1)}
-#topbar{position:sticky;top:0;z-index:100;background:var(--br);display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:54px;box-shadow:0 2px 10px rgba(46,125,50,.4)}
+.tbn.act{background:rgba(255,255,255,.28)!important}
+#topbar{position:sticky;top:0;z-index:100;margin-left:0;background:var(--br);display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:54px;box-shadow:0 2px 10px rgba(46,125,50,.4)}
 [data-theme="dark"] #topbar{background:#1B1F2E;box-shadow:0 2px 8px rgba(0,0,0,.5)}
 .tb-lo h1{font-size:16px;font-weight:800;color:#fff}
 .tb-lo small{font-size:11px;color:rgba(255,255,255,.75);display:block;margin-top:1px}
@@ -40,11 +41,24 @@ input,select,textarea,button{font-family:inherit;font-size:14px;color:var(--t1)}
 .tbn{background:none;border:none;color:rgba(255,255,255,.85);cursor:pointer;font-size:17px;padding:8px;border-radius:8px}
 .tbn:hover{background:rgba(255,255,255,.15)}
 [data-theme="dark"] .tbn{color:var(--t2)}
-#bnav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--card);border-top:1px solid var(--bdr);display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;box-shadow:0 -2px 8px rgba(0,0,0,.06)}
+/* Side drawer nav — vertically centred for one-handed reach */
+#bnav{position:fixed;top:0;bottom:0;left:0;z-index:120;background:var(--card);border-right:1px solid var(--bdr);
+  display:flex;flex-direction:column;justify-content:center;gap:4px;padding:10px 8px;
+  width:62px;transition:width .22s ease;box-shadow:2px 0 12px rgba(0,0,0,.10);overflow:hidden}
+#bnav.exp{width:190px}
+#nav-scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:110;opacity:0;pointer-events:none;transition:opacity .22s}
+#nav-scrim.on{opacity:1;pointer-events:auto}
+#nav-tgl{position:absolute;top:12px;left:0;right:0;margin:0 auto;width:40px;height:40px;border:none;background:var(--surf);
+  border-radius:50%;color:var(--br);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #bnav::-webkit-scrollbar{display:none}
-.nb{flex:0 0 auto;min-width:58px;padding:9px 5px 8px;border:none;background:transparent;cursor:pointer;color:var(--t3);border-top:2.5px solid transparent;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;font-weight:600;white-space:nowrap;transition:all .15s}
+.nb{flex:0 0 auto;border:none;background:transparent;cursor:pointer;color:var(--t3);
+  display:flex;flex-direction:row;align-items:center;gap:12px;font-size:12px;font-weight:600;white-space:nowrap;
+  padding:11px 12px;border-radius:var(--rs);border-left:3px solid transparent;transition:background .15s,color .15s}
+.nb i{font-size:17px;width:22px;text-align:center;flex-shrink:0}
+.nb span{opacity:0;transition:opacity .18s;overflow:hidden}
+#bnav.exp .nb span{opacity:1}
 .nb i{font-size:16px}
-.nb.on{color:var(--br);border-top-color:var(--br);background:var(--brl)}
+.nb.on{color:var(--br);border-left-color:var(--br);background:var(--brl)}
 .page{display:none;padding:14px;max-width:700px;margin:0 auto}
 .page.on{display:block}
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);margin-bottom:14px;overflow:hidden;transition:background .2s}
@@ -62,10 +76,18 @@ input,select,textarea,button{font-family:inherit;font-size:14px;color:var(--t1)}
 .rpills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .rpill{background:none;border:1.5px solid var(--bdr);border-radius:99px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--t3);cursor:pointer;transition:all .15s}
 .rpill.on{background:var(--br);border-color:var(--br);color:#fff}
+/* nested tab rows keep the inline pill style */
 .tabs{display:flex;background:var(--surf);border-radius:var(--rs);padding:3px;margin-bottom:14px;gap:2px;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
-.tab{flex:0 0 auto;padding:7px 12px;border:none;background:transparent;border-radius:var(--rx);cursor:pointer;font-size:12px;font-weight:600;color:var(--t3);transition:all .15s;white-space:nowrap}
-.tab.on{background:var(--card);color:var(--t1);box-shadow:var(--sh)}
+/* only a page's own tab row docks to the bottom */
+.page>.tabs{position:fixed;bottom:0;left:62px;right:0;z-index:95;background:var(--card);
+  border-top:1px solid var(--bdr);border-radius:0;padding:6px 8px calc(6px + env(safe-area-inset-bottom));
+  gap:4px;box-shadow:0 -2px 10px rgba(0,0,0,.07);margin:0}
+.page>.tabs .tab{flex:1 1 auto;min-width:76px;padding:9px 10px;text-align:center}
+.tabs .tab{flex:0 0 auto;padding:7px 12px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:none;background:transparent;border-radius:var(--rx);cursor:pointer;font-size:12px;font-weight:600;color:var(--t3);transition:all .15s;white-space:nowrap}
+.tab.on{background:var(--brl);color:var(--br);box-shadow:none}
 .fld{margin-bottom:12px}
 .lbl{display:block;font-size:12px;font-weight:600;color:var(--t2);margin-bottom:5px}
 .inp{width:100%;padding:10px 12px;border:1.5px solid var(--bdr);border-radius:var(--rs);font-size:14px;background:var(--card);color:var(--t1);outline:none;transition:border-color .15s,background .2s}
@@ -210,17 +232,19 @@ textarea.inp{resize:vertical;min-height:60px}
   <div class="tb-ri">
     <button class="tbn" id="th-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbn" onclick="doSync()"><i class="fa-solid fa-arrows-rotate" id="sync-ic"></i></button>
+    <button class="tbn" id="set-btn" onclick="gp('set',null)"><i class="fa-solid fa-gear"></i></button>
   </div>
 </div>
 
+<div id="nav-scrim" onclick="navToggle(false)"></div>
 <nav id="bnav">
-  <button class="nb on" onclick="gp('dash',this)"><i class="fa-solid fa-gauge-high"></i>Dashboard</button>
-  <button class="nb" onclick="gp('sales',this)"><i class="fa-solid fa-arrow-trend-up"></i>Sales</button>
-  <button class="nb" onclick="gp('purch',this)"><i class="fa-solid fa-cart-shopping"></i>Purchases</button>
-  <button class="nb" onclick="gp('inv',this)"><i class="fa-solid fa-file-invoice"></i>Invoices</button>
-  <button class="nb" onclick="gp('prices',this)"><i class="fa-solid fa-tags"></i>Prices</button>
-  <button class="nb" onclick="gp('rep',this)"><i class="fa-solid fa-chart-bar"></i>Reports</button>
-  <button class="nb" onclick="gp('set',this)"><i class="fa-solid fa-gear"></i>Settings</button>
+  <button id="nav-tgl" onclick="navToggle()" aria-label="Menu"><i class="fa-solid fa-bars"></i></button>
+  <button class="nb on" onclick="gp('dash',this)"><i class="fa-solid fa-gauge-high"></i><span>Dashboard</span></button>
+  <button class="nb" onclick="gp('sales',this)"><i class="fa-solid fa-arrow-trend-up"></i><span>Sales</span></button>
+  <button class="nb" onclick="gp('purch',this)"><i class="fa-solid fa-cart-shopping"></i><span>Purchases</span></button>
+  <button class="nb" onclick="gp('inv',this)"><i class="fa-solid fa-file-invoice"></i><span>Invoices</span></button>
+  <button class="nb" onclick="gp('prices',this)"><i class="fa-solid fa-tags"></i><span>Prices</span></button>
+  <button class="nb" onclick="gp('rep',this)"><i class="fa-solid fa-chart-bar"></i><span>Reports</span></button>
 </nav>
 
 <!-- DASHBOARD -->
@@ -864,7 +888,23 @@ function fillSels(){
 
 async function doSync(){$('sync-ic').className='fa-solid fa-arrows-rotate fa-spin';await loadAll();const pg=document.querySelector('.page.on')?.id?.replace('page-','');if(pg)rPage(pg);$('sync-ic').className='fa-solid fa-arrows-rotate';toast('Refreshed','ok');}
 
-function gp(id,btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));$('page-'+id).classList.add('on');btn?.classList.add('on');rPage(id);}
+function navToggle(force){
+  const n=$('bnav'),s=$('nav-scrim');
+  const open=(typeof force==='boolean')?force:!n.classList.contains('exp');
+  n.classList.toggle('exp',open); s.classList.toggle('on',open);
+}
+function gp(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
+  $('page-'+id).classList.add('on');
+  // Settings opens from the top bar and has no drawer button
+  if(btn)btn.classList.add('on');
+  else{const m=[...document.querySelectorAll('.nb')].find(b=>b.getAttribute('onclick')?.includes(`'${id}'`));if(m)m.classList.add('on');}
+  $('set-btn')?.classList.toggle('act',id==='set');
+  navToggle(false);
+  window.scrollTo(0,0);
+  rPage(id);
+}
 function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}if($('rc-date')&&!$('rc-date').value)$('rc-date').value=today();rRep();rRecon();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();},50);}}
 function stab(t,btn){$('s-add').style.display=t==='add'?'block':'none';$('s-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#page-sales .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rSH();}
 function ptab(t,btn){['add','hist','exp','dft'].forEach(k=>$('p-'+k).style.display=t===k?'block':'none');document.querySelectorAll('#page-purch .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rPH();else if(t==='exp')rEH();else if(t==='dft')rDfts();}
