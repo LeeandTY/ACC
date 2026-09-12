@@ -301,11 +301,11 @@ textarea.inp{resize:vertical;min-height:60px}
         <div class="ie-head"><span>#</span><span>Item</span><span>UOM</span><span>Qty</span><span style="text-align:right">Price (RM)</span><span style="text-align:right">Total</span><span></span></div>
         <div id="s-items"></div>
       </div>
-      <button class="btn btn-sm" onclick="addSaleRow()" style="margin-top:10px"><i class="fa-solid fa-plus"></i> Add item</button>
+      <button class="btn btn-sm" onclick="addSaleRow()" style="margin-top:10px"><i class="fa-solid fa-plus"></i> Add item</button> <button class="btn btn-sm" onclick="addRefundRow('s')" style="margin-top:10px" title="Return or refund — deducts from the total"><i class="fa-solid fa-minus"></i> Refund</button>
       <div class="entry-total"><span>Auto-calculated total</span><span id="s-tot" style="color:var(--grn)">RM 0.00</span></div>
       <div class="fld" style="margin-top:6px">
         <label class="lbl">Total amount (RM) <span style="font-weight:400;color:var(--t3)">— fill this in if prices above are not set yet</span></label>
-        <input class="inp" type="number" id="s-manual-tot" placeholder="e.g. 3200.00 — leave blank to use auto total above" step="0.01" min="0">
+        <input class="inp" type="number" id="s-manual-tot" placeholder="e.g. 3200.00 — leave blank to use auto total above" step="0.01">
       </div>
       <div class="btn-row">
         <button class="btn btn-pr" id="s-btn" onclick="doSaveSale()"><i class="fa-solid fa-check"></i> Record &amp; generate invoice</button>
@@ -354,7 +354,7 @@ textarea.inp{resize:vertical;min-height:60px}
         <div class="ie-p-head"><span>#</span><span>Item / Supplier</span><span>UOM</span><span>Qty</span><span style="text-align:right">Price (RM)</span><span style="text-align:right">Total</span><span></span></div>
         <div id="p-items"></div>
       </div>
-      <button class="btn btn-sm" onclick="addPurchRow()" style="margin-top:10px"><i class="fa-solid fa-plus"></i> Add item</button>
+      <button class="btn btn-sm" onclick="addPurchRow()" style="margin-top:10px"><i class="fa-solid fa-plus"></i> Add item</button> <button class="btn btn-sm" onclick="addRefundRow('p')" style="margin-top:10px" title="Return or refund — deducts from the total"><i class="fa-solid fa-minus"></i> Refund</button>
       <div class="entry-total"><span>Auto-calculated total</span><span id="p-tot" style="color:var(--red)">RM 0.00</span></div>
       <div class="fld" style="margin-top:6px">
         <label class="lbl">Total amount (RM) <span style="font-weight:400;color:var(--t3)">— fill this in if prices above are not set yet</span></label>
@@ -525,9 +525,9 @@ textarea.inp{resize:vertical;min-height:60px}
       <div class="ie-head"><span>#</span><span>Item</span><span>UOM</span><span>Qty</span><span style="text-align:right">Price (RM)</span><span style="text-align:right">Total</span><span></span></div>
       <div id="es-items-list"></div>
     </div>
-    <button class="btn btn-sm" onclick="addESRow()" style="margin-top:10px"><i class="fa-solid fa-plus"></i> Add item</button>
+    <button class="btn btn-sm" onclick="addESRow()" style="margin-top:10px"><i class="fa-solid fa-plus"></i> Add item</button> <button class="btn btn-sm" onclick="addRefundRow('es')" style="margin-top:10px" title="Return or refund — deducts from the total"><i class="fa-solid fa-minus"></i> Refund</button>
     <div class="entry-total"><span>Auto-calculated total</span><span id="es-total" style="color:var(--grn)">RM 0.00</span></div>
-    <div class="fld" style="margin-top:6px"><label class="lbl">Total amount (RM) <span style="font-weight:400;color:var(--t3)">— override if prices not set</span></label><input class="inp" type="number" id="es-manual-tot" placeholder="Leave blank to use auto total above" step="0.01" min="0"></div>
+    <div class="fld" style="margin-top:6px"><label class="lbl">Total amount (RM) <span style="font-weight:400;color:var(--t3)">— override if prices not set</span></label><input class="inp" type="number" id="es-manual-tot" placeholder="Leave blank to use auto total above" step="0.01"></div>
     <div class="btn-row">
       <button class="btn btn-pr" onclick="saveEditedSale()"><i class="fa-solid fa-check"></i> Save changes</button>
       <button class="btn" onclick="closeEditSale()">Cancel</button>
@@ -550,7 +550,7 @@ textarea.inp{resize:vertical;min-height:60px}
       <div class="ie-p-head"><span>#</span><span>Item / Supplier</span><span>UOM</span><span>Qty</span><span style="text-align:right">Price (RM)</span><span style="text-align:right">Total</span><span></span></div>
       <div id="ep-items-list"></div>
     </div>
-    <button class="btn btn-sm" onclick="addEPRow()" style="margin-top:10px"><i class="fa-solid fa-plus"></i> Add item</button>
+    <button class="btn btn-sm" onclick="addEPRow()" style="margin-top:10px"><i class="fa-solid fa-plus"></i> Add item</button> <button class="btn btn-sm" onclick="addRefundRow('ep')" style="margin-top:10px" title="Return or refund — deducts from the total"><i class="fa-solid fa-minus"></i> Refund</button>
     <div class="entry-total"><span>Auto-calculated total</span><span id="ep-total" style="color:var(--red)">RM 0.00</span></div>
     <div class="fld" style="margin-top:6px"><label class="lbl">Total amount (RM) <span style="font-weight:400;color:var(--t3)">— override if prices not set</span></label><input class="inp" type="number" id="ep-manual-tot" placeholder="Leave blank to use auto total above" step="0.01" min="0"></div>
     <div class="btn-row">
@@ -975,14 +975,25 @@ const supOpts=()=>{
   return'<option value="">Supplier...</option>'+[...names].sort().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
 };
 
+// Adds a return/refund line (negative qty) to a sale or purchase form
+function addRefundRow(t){
+  const mk={s:addSaleRow,p:addPurchRow,es:addESRow,ep:addEPRow}[t];
+  if(!mk)return;
+  const row=mk();
+  row.querySelector('.qty-inp').value=-1;
+  const nm=row.querySelector('.name-inp'); if(nm)nm.focus();
+  recalc(row.querySelector('.qty-inp'),t);
+  toast('Refund line added — type the item and price','ok');
+  return row;
+}
 function addSaleRow(){
   const container=$('s-items');
   const div=document.createElement('div');div.className='ie-row';
   div.innerHTML=`<span class="rnum">${++rc.s}</span>
   <div class="ac-wrap"><input type="text" placeholder="Type item..." class="name-inp" oninput="onAC(this,'sale')" onblur="hideAC(this)" autocomplete="off"><div class="ac-drop"></div></div>
   <input type="text" placeholder="kg/pkt" class="uom-inp" onblur="learnUOM(this,'sale')">
-  <input type="number" placeholder="1" class="qty-inp" min="0" step="any" oninput="recalc(this,'s')" style="text-align:right">
-  <input type="number" placeholder="0.00" class="price-inp" min="0" step="0.01" oninput="recalc(this,'s')" onblur="learnPrice(this,'sale')" style="text-align:right">
+  <input type="number" placeholder="1" class="qty-inp" step="any" oninput="recalc(this,'s')" style="text-align:right">
+  <input type="number" placeholder="0.00" class="price-inp" step="0.01" oninput="recalc(this,'s')" onblur="learnPrice(this,'sale')" style="text-align:right">
   <input type="text" readonly class="total-inp rtot" placeholder="—" style="text-align:right">
   <button class="rdel" onclick="rmRow(this,'s')">×</button>`;
   container.appendChild(div);attachDragHandlers(div,'s');
@@ -994,8 +1005,8 @@ function addPurchRow(){
   div.innerHTML=`<span class="rnum">${++rc.p}</span>
   <div><div class="ac-wrap"><input type="text" placeholder="Type item..." class="name-inp" oninput="onAC(this,'purch')" onblur="hideAC(this)" autocomplete="off"><div class="ac-drop"></div></div></div>
   <input type="text" placeholder="kg/pkt" class="uom-inp" onblur="learnUOM(this,'purch')">
-  <input type="number" placeholder="1" class="qty-inp" min="0" step="any" oninput="recalc(this,'p')" style="text-align:right">
-  <input type="number" placeholder="0.00" class="price-inp" min="0" step="0.01" oninput="recalc(this,'p')" onblur="learnPrice(this,'purch')" style="text-align:right">
+  <input type="number" placeholder="1" class="qty-inp" step="any" oninput="recalc(this,'p')" style="text-align:right">
+  <input type="number" placeholder="0.00" class="price-inp" step="0.01" oninput="recalc(this,'p')" onblur="learnPrice(this,'purch')" style="text-align:right">
   <input type="text" readonly class="total-inp rtot" placeholder="—" style="text-align:right">
   <button class="rdel" onclick="rmRow(this,'p')">×</button>`;
   container.appendChild(div);attachDragHandlers(div,'p');
@@ -1201,7 +1212,7 @@ function learnPrice(inp,type){
   const p=S.prices.find(x=>x.name.toLowerCase()===nm.toLowerCase());
   if(p&&price>0){const isSale=(type==='sale'||type==='es');const upd=isSale?{sell_price:price}:{cost_price:price};sb.from('prices').update({...upd,updated_at:new Date().toISOString()}).eq('id',p.id).then();}
 }
-function getSaleRows(){const c=$('s-items');return[...c.querySelectorAll('.ie-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);}
+function getSaleRows(){const c=$('s-items');return[...c.querySelectorAll('.ie-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty!==0);}
 function setPurchSupplier(selId,name){
   const sel=$(selId); if(!sel||!name)return;
   if(![...sel.options].some(o=>o.value===name)){
@@ -1209,7 +1220,7 @@ function setPurchSupplier(selId,name){
   }
   sel.value=name;
 }
-function getPurchRows(){const c=$('p-items');return[...c.querySelectorAll('.ie-p-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);}
+function getPurchRows(){const c=$('p-items');return[...c.querySelectorAll('.ie-p-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty!==0);}
 function fillRow(row,data,t){
   row.querySelector('.name-inp').value=data.name||'';
   row.querySelector('.uom-inp').value=data.uom||'';
@@ -1295,8 +1306,8 @@ function addESRow(){
   div.innerHTML=`<span class="rnum">${++rc.es}</span>
   <div class="ac-wrap"><input type="text" placeholder="Type item..." class="name-inp" oninput="onAC(this,'es')" onblur="hideAC(this)" autocomplete="off"><div class="ac-drop"></div></div>
   <input type="text" placeholder="kg/pkt" class="uom-inp" onblur="learnUOM(this,'es')">
-  <input type="number" placeholder="1" class="qty-inp" min="0" step="any" oninput="recalc(this,'es')" style="text-align:right">
-  <input type="number" placeholder="0.00" class="price-inp" min="0" step="0.01" oninput="recalc(this,'es')" onblur="learnPrice(this,'es')" style="text-align:right">
+  <input type="number" placeholder="1" class="qty-inp" step="any" oninput="recalc(this,'es')" style="text-align:right">
+  <input type="number" placeholder="0.00" class="price-inp" step="0.01" oninput="recalc(this,'es')" onblur="learnPrice(this,'es')" style="text-align:right">
   <input type="text" readonly class="total-inp rtot" placeholder="—" style="text-align:right">
   <button class="rdel" onclick="rmRow(this,'es')">×</button>`;
   $('es-items-list').appendChild(div);attachDragHandlers(div,'es');return div;
@@ -1306,8 +1317,8 @@ function addEPRow(){
   div.innerHTML=`<span class="rnum">${++rc.ep}</span>
   <div><div class="ac-wrap"><input type="text" placeholder="Type item..." class="name-inp" oninput="onAC(this,'ep')" onblur="hideAC(this)" autocomplete="off"><div class="ac-drop"></div></div></div>
   <input type="text" placeholder="kg/pkt" class="uom-inp" onblur="learnUOM(this,'ep')">
-  <input type="number" placeholder="1" class="qty-inp" min="0" step="any" oninput="recalc(this,'ep')" style="text-align:right">
-  <input type="number" placeholder="0.00" class="price-inp" min="0" step="0.01" oninput="recalc(this,'ep')" onblur="learnPrice(this,'ep')" style="text-align:right">
+  <input type="number" placeholder="1" class="qty-inp" step="any" oninput="recalc(this,'ep')" style="text-align:right">
+  <input type="number" placeholder="0.00" class="price-inp" step="0.01" oninput="recalc(this,'ep')" onblur="learnPrice(this,'ep')" style="text-align:right">
   <input type="text" readonly class="total-inp rtot" placeholder="—" style="text-align:right">
   <button class="rdel" onclick="rmRow(this,'ep')">×</button>`;
   $('ep-items-list').appendChild(div);attachDragHandlers(div,'ep');return div;
@@ -1363,7 +1374,7 @@ async function saveEditedSale(){
   finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check"></i> Save changes';}
 }
 function getESRows(){
-  return[...$('es-items-list').querySelectorAll('.ie-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);
+  return[...$('es-items-list').querySelectorAll('.ie-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty!==0);
 }
 async function delSale(id){
   if(!confirm('Delete this sale?'))return;
@@ -1520,7 +1531,7 @@ async function saveEditedPurch(){
   finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check"></i> Save changes';}
 }
 function getEPRows(){
-  return[...$('ep-items-list').querySelectorAll('.ie-p-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty>0);
+  return[...$('ep-items-list').querySelectorAll('.ie-p-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty!==0);
 }
 async function delPurch(id){if(!confirm('Delete?'))return;await sb.from('purchase_items').delete().eq('purchase_id',id);await sb.from('daily_purchases').delete().eq('id',id);toast('Deleted');await loadAll();rPH();}
 function doRepeat(){
@@ -1683,7 +1694,7 @@ function viewInv(id){
     ${pd>0?`<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700;font-size:13px;color:var(--t1)"><span>Balance due</span><span style="color:${bal>0?'var(--red)':'var(--grn)'}">RM ${fmt(bal)}</span></div>`:''}
     <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
       <input class="inp sm" type="date" id="pay-d" value="${today()}" style="flex:0 0 130px">
-      <input class="inp sm" type="number" id="pay-a" placeholder="Amount (RM)" step="0.01" min="0" style="flex:1" value="${bal>0?bal.toFixed(2):''}">
+      <input class="inp sm" type="number" id="pay-a" placeholder="Amount (RM)" step="0.01" style="flex:1" value="${bal>0?bal.toFixed(2):''}">
       <select class="inp sm" id="pay-m" style="flex:0 0 110px">
         <option value="cash">Cash</option>
         <option value="transfer">Transfer</option>
@@ -2367,8 +2378,8 @@ function renderScanItems(){
   <div style="display:grid;grid-template-columns:1fr 56px 50px 70px 24px;gap:5px;margin-bottom:6px;align-items:center">
     <input class="inp sm" placeholder="Item" value="${esc(r.name)}" oninput="_scanRows[${i}].name=this.value">
     <input class="inp sm" placeholder="UOM" value="${esc(r.uom)}" oninput="_scanRows[${i}].uom=this.value">
-    <input class="inp sm" type="number" inputmode="decimal" value="${r.qty||''}" min="0" step="any" style="text-align:right" oninput="_scanRows[${i}].qty=parseFloat(this.value)||0;updateScanTotal()">
-    <input class="inp sm" type="number" inputmode="decimal" value="${r.unit_price||''}" min="0" step="0.01" style="text-align:right" oninput="_scanRows[${i}].unit_price=parseFloat(this.value)||0;updateScanTotal()">
+    <input class="inp sm" type="number" inputmode="decimal" value="${r.qty||''}" step="any" style="text-align:right" oninput="_scanRows[${i}].qty=parseFloat(this.value)||0;updateScanTotal()">
+    <input class="inp sm" type="number" inputmode="decimal" value="${r.unit_price||''}" step="0.01" style="text-align:right" oninput="_scanRows[${i}].unit_price=parseFloat(this.value)||0;updateScanTotal()">
     <button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;line-height:1;padding:0" onclick="_scanRows.splice(${i},1);renderScanItems()">×</button>
   </div>`).join('');
   updateScanTotal();
