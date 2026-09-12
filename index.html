@@ -1386,6 +1386,10 @@ function rSH(){
   if(q)ls=ls.filter(s=>{const si=getSI(s.id);return(s.customer_name+' '+(s.notes||'')+' '+si.map(r=>r.name).join(' ')).toLowerCase().includes(q);});
   const tot=sumAmt(ls);$('sh-tot').textContent='RM '+fmt(tot);
   if(!ls.length){$('sh-bd').innerHTML='<div class="empty"><i class="fa-solid fa-receipt"></i><p>No records found</p></div>';return;}
+  // same customer + same day recorded more than once (e.g. two handwritten pages)
+  const dupKeys={},dupShown={};
+  ls.forEach(s=>{const k=s.entry_date+'|'+(s.customer_name||'');dupKeys[k]=(dupKeys[k]||0)+1;});
+  Object.keys(dupKeys).forEach(k=>{if(dupKeys[k]<2)delete dupKeys[k];});
   let html='',last='';
   ls.forEach(s=>{
     if(s.entry_date!==last){const dt=ls.filter(x=>x.entry_date===s.entry_date);html+=`<div class="day-hd"><span>${fmtD(s.entry_date)}</span><span style="color:var(--grn)">RM ${fmt(sumAmt(dt))}</span></div>`;last=s.entry_date;}
@@ -1393,8 +1397,55 @@ function rSH(){
     const dr=si.length?si.map(r=>`${mName(r)} x${r.qty}${r.uom?' '+r.uom:''}`).join(', '):(s.notes||'');
     html+=`<div class="tx"><div class="tx-l"><div class="tx-nm">${esc(s.customer_name||'?')}</div><div class="tx-sb">${esc(dr.substring(0,70))}${dr.length>70?'…':''}</div></div>
     <div style="text-align:right"><div class="tx-am g">RM ${fmt(s.amount)}</div><div class="tx-acts" style="justify-content:flex-end"><button class="btn btn-sm" onclick="editSale('${s.id}')"><i class="fa-solid fa-pen"></i> Edit</button><button class="btn btn-sm" onclick="openATPFromSale('${s.id}')" title="Add to purchase drafts"><i class="fa-solid fa-cart-plus"></i></button><button class="btn btn-rd btn-sm btn-ic" onclick="delSale('${s.id}')"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
+    if(dupKeys[s.entry_date+'|'+(s.customer_name||'')]&&!dupShown[s.entry_date+'|'+(s.customer_name||'')]){
+      dupShown[s.entry_date+'|'+(s.customer_name||'')]=1;
+      const k=dupKeys[s.entry_date+'|'+(s.customer_name||'')];
+      html+=`<div style="background:var(--brl);border:1px solid var(--br);border-radius:var(--rs);padding:8px 10px;margin:-4px 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="font-size:11px;color:var(--br);font-weight:600"><i class="fa-solid fa-layer-group" style="margin-right:5px"></i>${k} records for ${esc(s.customer_name||'?')} on this day</div>
+        <button class="btn btn-sm" onclick="mergeSales('${s.entry_date}','${esc(s.customer_name||'').replace(/'/g,'&#39;')}')">Merge</button>
+      </div>`;
+    }
   });
   $('sh-bd').innerHTML=html+`<div class="tot-row"><span>${ls.length} records</span><span style="color:var(--grn)">RM ${fmt(tot)}</span></div>`;
+}
+
+async function mergeSales(date,cust){
+  const group=S.sales.filter(s=>s.entry_date===date&&(s.customer_name||'')===cust)
+                     .sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+  if(group.length<2){toast('Nothing to merge','err');return;}
+  const keep=group[0], drop=group.slice(1);
+  const allItems=group.flatMap(s=>getSI(s.id));
+  const newTotal=group.reduce((t,s)=>t+Number(s.amount||0),0);
+  if(!confirm(`Merge ${group.length} records for ${cust} on ${fmtD(date)} into one?\n\nItems: ${allItems.length}\nTotal: RM ${fmt(newTotal)}\n\nTheir invoices will be combined into one as well.`))return;
+  try{
+    // move every line item onto the kept sale
+    const ids=drop.flatMap(s=>getSI(s.id)).map(i=>i.id);
+    if(ids.length)await sb.from('sale_items').update({sale_id:keep.id}).in('id',ids);
+    // rebuild notes + amount on the kept sale
+    const desc=allItems.map(r=>`${mName(r)} x${r.qty}`).join(', ');
+    await sb.from('daily_sales').update({amount:newTotal,notes:desc.substring(0,400)}).eq('id',keep.id);
+    // combine the invoices for that client + date
+    const client=S.clients.find(cl=>cl.name===cust);
+    if(client){
+      const invs=S.invs.filter(i=>i.client_id===client.id&&i.issue_date===date)
+                       .sort((a,b)=>(a.invoice_number||'').localeCompare(b.invoice_number||''));
+      if(invs.length){
+        const kInv=invs[0], dInv=invs.slice(1);
+        if(dInv.length){
+          await sb.from('invoice_items').update({invoice_id:kInv.id}).in('invoice_id',dInv.map(i=>i.id));
+          await sb.from('invoice_payments').delete().in('invoice_id',dInv.map(i=>i.id));
+          await sb.from('invoices').delete().in('id',dInv.map(i=>i.id));
+        }
+        const tax=Number(kInv.tax_rate||0), ta=newTotal*(tax/100);
+        await sb.from('invoices').update({subtotal:newTotal,tax_amount:ta,total:newTotal+ta}).eq('id',kInv.id);
+      }
+    }
+    // remove the now-empty duplicate sales
+    await sb.from('daily_sales').delete().in('id',drop.map(s=>s.id));
+    logAct('edit',`Merged ${group.length} sales: ${cust} ${date} — RM ${fmt(newTotal)}`);
+    toast('Merged into one record','ok');
+    await loadAll();rSH();
+  }catch(e){toast('Merge failed: '+e.message,'err');}
 }
 
 async function doSavePurch(){
@@ -2324,8 +2375,14 @@ function confirmScan(){
   if(_scanMode==='s'){
     // Fill the SALES form
     const custId=$('scan-sup').value;
-    if(custId)$('s-cust').value=custId;
-    $('s-items').innerHTML='';rc.s=0;
+    // Second page of the same handwritten invoice? Offer to add instead of replace.
+    const have=[...$('s-items').querySelectorAll('.ie-row')].filter(r=>(r.querySelector('.name-inp')?.value||'').trim()).length;
+    let append=false;
+    if(have){
+      append=confirm(`The sale form already has ${have} item${have>1?'s':''}.\n\nOK  =  ADD these ${rows.length} scanned items to it (one invoice)\nCancel  =  REPLACE with the scanned items`);
+    }
+    if(custId&&!append)$('s-cust').value=custId;
+    if(!append){$('s-items').innerHTML='';rc.s=0;}
     rows.forEach(r=>{
       const row=addSaleRow();
       fillRow(row,{name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price},'s');
@@ -2336,7 +2393,7 @@ function confirmScan(){
     gp('sales',salesBtn);
     const addTab=document.querySelector('#page-sales .tab');
     if(addTab)stab('add',addTab);
-    toast(rows.length+' items added — check customer & prices, then Record','ok');
+    toast(rows.length+(append?' more items added — now '+(have+rows.length)+' in total':' items added — check customer & prices, then Record'),'ok');
   }else{
     // Fill the PURCHASE form
     const sup=$('scan-sup').value;
@@ -2344,8 +2401,13 @@ function confirmScan(){
     if(sup&&!S.sups.some(s=>normNm(s.name)===normNm(sup))){
       sb.from('suppliers').insert({name:sup}).then(({error})=>{if(!error)loadAll();});
     }
-    $('p-items').innerHTML='';rc.p=0;
-    setPurchSupplier('p-sup',sup);
+    const haveP=[...$('p-items').querySelectorAll('.ie-p-row')].filter(r=>(r.querySelector('.name-inp')?.value||'').trim()).length;
+    let appendP=false;
+    if(haveP){
+      appendP=confirm(`The purchase form already has ${haveP} item${haveP>1?'s':''}.\n\nOK  =  ADD these ${rows.length} scanned items to it (one bill)\nCancel  =  REPLACE with the scanned items`);
+    }
+    if(!appendP){$('p-items').innerHTML='';rc.p=0;}
+    if(!appendP||!$('p-sup')?.value)setPurchSupplier('p-sup',sup);
     rows.forEach(r=>{
       const row=addPurchRow();
       fillRow(row,{name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price},'p');
@@ -2356,7 +2418,7 @@ function confirmScan(){
     gp('purch',purchBtn);
     const addTab=document.querySelector('#page-purch .tab');
     if(addTab)ptab('add',addTab);
-    toast(rows.length+' items added — check supplier & prices, then Record','ok');
+    toast(rows.length+(appendP?' more items added — now '+(haveP+rows.length)+' in total':' items added — check supplier & prices, then Record'),'ok');
   }
 }
 
