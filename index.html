@@ -1157,7 +1157,7 @@ function recalc(inp,t){
   const qty=parseFloat(row.querySelector('.qty-inp').value)||0;
   const price=parseFloat(row.querySelector('.price-inp').value)||0;
   const tot=qty*price;
-  row.querySelector('.total-inp').value=tot>0?tot.toFixed(2):'';
+  row.querySelector('.total-inp').value=tot!==0?tot.toFixed(2):'';
   recalcTot(t);
 }
 function recalcTot(t){
