@@ -1627,23 +1627,25 @@ function openInvForm(eid){
   const co='<option value="">Select client *</option>'+S.clients.map(c=>`<option value="${c.id}"${inv?.client_id===c.id?' selected':''}>${esc(c.name)}</option>`).join('');
   const so=['draft','sent','partial','paid','overdue'].map(s=>`<option value="${s}"${inv?.status===s||(!inv&&s==='draft')?' selected':''}>${capSt(s)}</option>`).join('');
   const items=inv?.items||[{description:'',quantity:1,unit_price:0}];
-  const ih=items.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(it=>`<div class="line-row"><input class="inp sm" placeholder="Description" value="${esc(mName(it,'description'))}" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Qty" value="${it.quantity||1}" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Price" value="${it.unit_price||0}" step="0.01" oninput="calcIT()"><button class="dx" onclick="this.parentElement.remove();calcIT()">×</button></div>`).join('');
+  const ih=items.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(it=>`<div class="line-row"><input class="inp sm" placeholder="Description" value="${esc(mName(it,'description'))}" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Qty" value="${it.quantity??1}" step="any" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Price" value="${it.unit_price||0}" step="0.01" oninput="calcIT()"><button class="dx" onclick="this.parentElement.remove();calcIT()">×</button></div>`).join('');
   openM(`<div class="m-hd"><div class="m-ti">${inv?'Edit Invoice':'New Invoice'}</div><button class="m-x" onclick="closeM()">×</button></div>
   <div class="fld"><label class="lbl">Client *</label><select class="inp" id="mi-cl">${co}</select></div>
   <div class="r2"><div class="fld"><label class="lbl">Issue Date</label><input class="inp" type="date" id="mi-dt" value="${inv?.issue_date||today()}"></div><div class="fld"><label class="lbl">Due Date</label><input class="inp" type="date" id="mi-dd" value="${inv?.due_date||''}"></div></div>
   <div class="r2"><div class="fld"><label class="lbl">Status</label><select class="inp" id="mi-st">${so}</select></div><div class="fld"><label class="lbl">Tax % (SST)</label><input class="inp" type="number" id="mi-tx" value="${inv?.tax_rate??S.cfg.sstRate}"></div></div>
-  <div class="fld"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><label class="lbl" style="margin:0">Line Items</label><button class="btn btn-sm" onclick="addLine()"><i class="fa-solid fa-plus"></i> Add</button></div><div id="mi-ls">${ih}</div></div>
+  <div class="fld"><div style="display:flex;justify-content:space-between;margin-bottom:8px"><label class="lbl" style="margin:0">Line Items</label><div style="display:flex;gap:5px"><button class="btn btn-sm" onclick="addLine()"><i class="fa-solid fa-plus"></i> Add</button><button class="btn btn-sm" onclick="addLine(true)" title="Return or refund — deducts from the total"><i class="fa-solid fa-minus"></i> Refund</button></div></div><div id="mi-ls">${ih}</div></div>
   <div id="mi-tot" style="background:var(--surf);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px;font-size:13px;color:var(--t2)">Total: RM 0.00</div>
   <div class="fld"><label class="lbl">Notes / Terms</label><textarea class="inp" id="mi-nt" rows="2">${esc(inv?.notes||S.cfg.terms||'')}</textarea></div>
   <div class="btn-row"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-pr" id="mi-btn" onclick="submitInv()"><i class="fa-solid fa-check"></i> ${inv?'Save':'Create'}</button></div>`);
   setTimeout(calcIT,50);
 }
-function addLine(){const d=document.createElement('div');d.className='line-row';d.innerHTML=`<input class="inp sm" placeholder="Description" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Qty" value="1" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Price" value="0" step="0.01" oninput="calcIT()"><button class="dx" onclick="this.parentElement.remove();calcIT()">×</button>`;$('mi-ls').appendChild(d);}
+function addLine(neg){const d=document.createElement('div');d.className='line-row';
+  d.innerHTML=`<input class="inp sm" placeholder="${neg?'Refund / return reason':'Description'}" value="${neg?'Refund — ':''}" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Qty" value="${neg?-1:1}" step="any" oninput="calcIT()"><input class="inp sm" type="number" placeholder="Price" value="0" step="0.01" oninput="calcIT()"><button class="dx" onclick="this.parentElement.remove();calcIT()">×</button>`;
+  $('mi-ls').appendChild(d);calcIT();}
 function calcIT(){const rows=$('mi-ls')?.querySelectorAll('.line-row')||[];let sub=0;rows.forEach(r=>{const i=r.querySelectorAll('input');sub+=(Number(i[1]?.value)||0)*(Number(i[2]?.value)||0);});const tx=Number($('mi-tx')?.value||0),ta=sub*(tx/100);if($('mi-tot'))$('mi-tot').innerHTML=`<span style="color:var(--t3)">Subtotal: RM ${fmt(sub)}</span>${tx>0?` · Tax: RM ${fmt(ta)}`:''} · <strong style="color:var(--br)">Total: RM ${fmt(sub+ta)}</strong>`;}
 async function submitInv(){
   const btn=$('mi-btn'),cid=$('mi-cl').value;if(!cid){toast('Select a client','err');return;}
   const rows=[...$('mi-ls').querySelectorAll('.line-row')];
-  const its=rows.map(r=>{const i=r.querySelectorAll('input');return{description:i[0]?.value||'',quantity:Number(i[1]?.value)||1,unit_price:Number(i[2]?.value)||0};});
+  const its=rows.map(r=>{const i=r.querySelectorAll('input');const q=i[1]?.value===''?1:Number(i[1].value);return{description:i[0]?.value||'',quantity:isNaN(q)?1:q,unit_price:Number(i[2]?.value)||0};});
   const tx=Number($('mi-tx').value)||0,sub=its.reduce((s,i)=>s+i.quantity*i.unit_price,0),ta=sub*(tx/100);
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   try{
@@ -1672,11 +1674,11 @@ function viewInv(id){
     <div><div style="font-weight:700;font-size:15px;color:var(--t1)">${esc(inv.client?.name||'?')}</div><div style="font-size:12px;color:var(--t3);margin-top:3px">${fmtD(inv.issue_date)}${inv.due_date?' · Due '+fmtD(inv.due_date):''}</div></div>
     <div style="text-align:right"><div style="font-size:22px;font-weight:800;color:var(--t1)">RM ${fmt(inv.total)}</div><span class="bdg b-${inv.status}">${capSt(inv.status)}</span></div>
   </div>
-  ${its.length?`<div class="tw"><table class="tbl" style="margin-bottom:14px"><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th></tr></thead><tbody>${its.map(it=>`<tr><td>${esc(mName(it,'description'))}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">RM ${fmt(it.quantity*it.unit_price)}</td></tr>`).join('')}</tbody><tfoot><tr style="background:var(--surf)"><td colspan="3" style="text-align:right;font-weight:700">Total</td><td class="n" style="font-weight:800">RM ${fmt(inv.total)}</td></tr></tfoot></table></div>`:''}
+  ${its.length?`<div class="tw"><table class="tbl" style="margin-bottom:14px"><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th></tr></thead><tbody>${its.map(it=>{const amt=it.quantity*it.unit_price;const neg=amt<0;return `<tr${neg?' style="color:var(--red)"':''}><td>${esc(mName(it,'description'))}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">${neg?'−':''}RM ${fmt(Math.abs(amt))}</td></tr>`;}).join('')}</tbody><tfoot><tr style="background:var(--surf)"><td colspan="3" style="text-align:right;font-weight:700">Total</td><td class="n" style="font-weight:800">RM ${fmt(inv.total)}</td></tr></tfoot></table></div>`:''}
   ${inv.notes?`<div style="font-size:12px;color:var(--t3);padding:10px;background:var(--surf);border-radius:var(--rs);margin-bottom:14px">${esc(inv.notes)}</div>`:''}
   <div style="margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px"><i class="fa-solid fa-money-bill-wave" style="color:var(--grn);margin-right:5px"></i>Payments</div>
-    ${(inv._pays||[]).map(p=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bdr);font-size:13px"><span style="color:var(--t3)">${fmtD(p.payment_date)} <span style="display:inline-block;background:var(--surf);border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-left:4px">${p.method==='transfer'?'<i class="fa-solid fa-building-columns" style="margin-right:3px"></i>Transfer':'<i class="fa-solid fa-money-bill" style="margin-right:3px"></i>Cash'}</span></span><div><span style="font-weight:700;color:var(--grn)">RM ${fmt(p.amount)}</span><button onclick="delPay('${p.id}','${id}')" style="background:none;border:none;color:var(--red);cursor:pointer;margin-left:8px;font-size:16px;vertical-align:middle">×</button></div></div>`).join('')}
+    ${(inv._pays||[]).map(p=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bdr);font-size:13px"><span style="color:var(--t3)">${fmtD(p.payment_date)} <span style="display:inline-block;background:var(--surf);border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-left:4px">${p.method==='transfer'?'<i class="fa-solid fa-building-columns" style="margin-right:3px"></i>Transfer':'<i class="fa-solid fa-money-bill" style="margin-right:3px"></i>Cash'}</span></span><div><span style="font-weight:700;color:${Number(p.amount)<0?'var(--red)':'var(--grn)'}">${Number(p.amount)<0?'−':''}RM ${fmt(Math.abs(p.amount))}</span><button onclick="delPay('${p.id}','${id}')" style="background:none;border:none;color:var(--red);cursor:pointer;margin-left:8px;font-size:16px;vertical-align:middle">×</button></div></div>`).join('')}
     ${!(inv._pays||[]).length?'<div style="font-size:12px;color:var(--t3);padding:6px 0">No payments yet.</div>':''}
     ${pd>0?`<div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700;font-size:13px;color:var(--t1)"><span>Balance due</span><span style="color:${bal>0?'var(--red)':'var(--grn)'}">RM ${fmt(bal)}</span></div>`:''}
     <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
@@ -1698,7 +1700,7 @@ function viewInv(id){
 }
 async function addPay(iid){
   const d=$('pay-d').value,a=Number($('pay-a').value);
-  if(!d||!a||a<=0){toast('Enter date and amount','err');return;}
+  if(!d||!a||isNaN(a)){toast('Enter date and amount','err');return;}
   const m=$('pay-m')?.value||'cash';
   const{error}=await sb.from('invoice_payments').insert({invoice_id:iid,payment_date:d,amount:a,method:m,notes:''});
   if(error){toast(error.message,'err');return;}
@@ -1706,10 +1708,11 @@ async function addPay(iid){
   const inv=S.invs.find(i=>i.id===iid);
   if(inv){
     const newPaid=(inv._paid||0)+a;
-    const newStatus=newPaid>=Number(inv.total)?'paid':'partial';
+    const tot=Number(inv.total);
+    const newStatus=newPaid>=tot?'paid':(newPaid<=0?'sent':'partial');
     await sb.from('invoices').update({status:newStatus}).eq('id',iid);
   }
-  toast(`Payment recorded (${m==='transfer'?'Transfer':'Cash'})`,'ok');await loadAll();rInv();viewInv(iid);
+  toast(`${a<0?'Refund':'Payment'} recorded (${m==='transfer'?'Transfer':'Cash'})`,'ok');await loadAll();rInv();viewInv(iid);
 }
 async function delPay(pid,iid){if(!confirm('Remove?'))return;await sb.from('invoice_payments').delete().eq('id',pid);await loadAll();rInv();viewInv(iid);}
 async function delInv(id){if(!confirm('Delete invoice?'))return;await sb.from('invoice_payments').delete().eq('invoice_id',id);await sb.from('invoice_items').delete().eq('invoice_id',id);await sb.from('invoices').delete().eq('id',id);closeM();toast('Deleted');await loadAll();rInv();}
@@ -1721,7 +1724,7 @@ function printInv(id){
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${inv.invoice_number}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:36px;max-width:800px;margin:0 auto}.hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;padding-bottom:16px;border-bottom:3px solid #2E7D32}.cn{font-size:18px;font-weight:700;color:#2E7D32}.in{font-size:26px;font-weight:800;color:#2E7D32}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f5f5f5;padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd}td{padding:9px 12px;border-bottom:1px solid #eee}.n{text-align:right}.tots{max-width:260px;margin-left:auto}.tr{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}.gd{font-size:16px;font-weight:800;color:#2E7D32;border-top:2px solid #2E7D32;padding-top:8px;margin-top:4px}.ft{margin-top:28px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999}.bt{margin-bottom:24px}.lbs{font-size:10px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:4px}@media print{body{padding:16px}}</style></head><body>
   <div class="hd"><div><div class="cn">${esc(p.company||'L&TY Trading')}</div><div style="font-size:12px;color:#555;margin-top:3px">${esc(p.address||'')}</div>${p.phone?`<div style="font-size:12px;color:#555">${esc(p.phone)}</div>`:''} ${p.regNo?`<div style="font-size:12px;color:#555">Reg: ${esc(p.regNo)}</div>`:''}</div><div style="text-align:right"><div class="in">${esc(inv.invoice_number)}</div><div style="font-size:12px;color:#555;margin-top:4px">Date: ${fmtD(inv.issue_date)}</div>${inv.due_date?`<div style="font-size:12px;color:#c00">Due: ${fmtD(inv.due_date)}</div>`:''}</div></div>
   <div class="bt"><div class="lbs">Bill To</div><div style="font-weight:700;font-size:14px">${esc(inv.client?.name||'')}</div>${inv.client?.address?`<div style="color:#555;font-size:12px;margin-top:2px">${esc(inv.client.address)}</div>`:''} ${inv.client?.email?`<div style="color:#555;font-size:12px">${esc(inv.client.email)}</div>`:''}</div>
-  <table><thead><tr><th>Description</th><th class="n">Qty</th><th class="n">Unit Price</th><th class="n">Amount</th></tr></thead><tbody>${its.map(it=>`<tr><td>${esc(mName(it,'description'))}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">RM ${fmt(it.quantity*it.unit_price)}</td></tr>`).join('')}</tbody></table>
+  <table><thead><tr><th>Description</th><th class="n">Qty</th><th class="n">Unit Price</th><th class="n">Amount</th></tr></thead><tbody>${its.map(it=>{const amt=it.quantity*it.unit_price;const neg=amt<0;return `<tr${neg?' style="color:#DC2626"':''}><td>${esc(mName(it,'description'))}</td><td class="n">${it.quantity}</td><td class="n">RM ${fmt(it.unit_price)}</td><td class="n" style="font-weight:600">${neg?'−':''}RM ${fmt(Math.abs(amt))}</td></tr>`;}).join('')}</tbody></table>
   <div class="tots"><div class="tr"><span>Subtotal</span><span>RM ${fmt(sub)}</span></div>${tx>0?`<div class="tr"><span>SST (${tx}%)</span><span>RM ${fmt(ta)}</span></div>`:''}<div class="tr gd"><span>TOTAL DUE</span><span>RM ${fmt(tot)}</span></div></div>
   ${inv.notes?`<div class="ft"><strong>Terms:</strong> ${esc(inv.notes)}</div>`:''}
   <div class="ft" style="margin-top:16px">Thank you for your business.</div>
@@ -2545,7 +2548,9 @@ async function shareInvWhatsApp(id){
       doc.text(qtyStr,MR-55,y+5,{align:'right'});
       doc.text(fmt(it.unit_price),MR-30,y+5,{align:'right'});
       doc.setFont('helvetica','bold');
-      doc.text(fmt(amt),MR,y+5,{align:'right'});
+      if(amt<0)doc.setTextColor(220,38,38);
+      doc.text((amt<0?'-':'')+fmt(Math.abs(amt)),MR,y+5,{align:'right'});
+      doc.setTextColor(30,30,30);
       doc.setFont('helvetica','normal');
       doc.setDrawColor(235,235,235);doc.line(ML,y+7,MR,y+7);
       y+=8;
