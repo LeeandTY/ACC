@@ -1298,7 +1298,7 @@ async function doSaveSale(){
   const btn=$('s-btn');const isE=false; // new sale only; editing handled by saveEditedSale()
   const cid=$('s-cust').value;
   if(!cid){toast('Select a customer','err');return;}
-  const cn=keepName||S.custs.find(c=>c.id===cid)?.name||'Unknown';
+  const cn=S.custs.find(c=>c.id===cid)?.name||'Unknown';
   const rows=getSaleRows();
   if(!rows.length){toast('Add at least one item with a quantity','err');return;}
   const autoTotal=rows.reduce((s,r)=>s+r.total,0);
@@ -1419,7 +1419,7 @@ async function saveEditedSale(){
   const autoTotal=rows.reduce((s,r)=>s+r.total,0);
   const manualTot=parseFloat($('es-manual-tot').value||0);
   const total=manualTot>0?manualTot:autoTotal;
-  const cn=S.custs.find(c=>c.id===cid)?.name||'Unknown';
+  const cn=keepName||S.custs.find(c=>c.id===cid)?.name||'Unknown';
   const desc=rows.map(r=>`${r.name} x${r.qty}`).join(', ');
   const saleDate=$('es-date').value;
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
