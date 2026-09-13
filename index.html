@@ -170,7 +170,11 @@ textarea.inp{resize:vertical;min-height:60px}
 #ov.on{display:flex}
 #mb{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-height:93vh;overflow-y:auto;padding:6px 16px 32px;animation:slideUp .22s ease}
 @keyframes slideUp{from{transform:translateY(50px);opacity:0}to{transform:none;opacity:1}}
-.mh{width:36px;height:4px;background:var(--bdr2);border-radius:2px;margin:10px auto 16px}
+.mh{width:44px;height:5px;background:var(--bdr2);border-radius:3px;margin:0 auto;
+  cursor:grab;touch-action:none;position:relative}
+.mh::after{content:'';position:absolute;left:-70px;right:-70px;top:-12px;bottom:-14px}
+.mh-wrap{padding:10px 0 14px;display:flex;justify-content:center;touch-action:none}
+.mh:active{cursor:grabbing;background:var(--t3)}
 .m-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 .m-ti{font-size:17px;font-weight:800;color:var(--t1)}
 .m-x{background:none;border:none;font-size:22px;color:var(--t3);cursor:pointer;padding:4px;line-height:1}
@@ -464,7 +468,7 @@ textarea.inp{resize:vertical;min-height:60px}
 <!-- RECEIPT SCANNER MODAL -->
 <div id="scan-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center">
   <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:700px;max-height:93vh;overflow-y:auto;padding:6px 16px 32px">
-    <div class="mh"></div>
+    <div class="mh-wrap"><div class="mh"></div></div>
     <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-camera" style="color:var(--br);margin-right:8px"></i><span id="scan-title">Scan Receipt</span></div><button class="m-x" onclick="closeScanner()">×</button></div>
     <div id="scan-step1">
       <div style="background:var(--surf);border-radius:var(--rs);padding:10px 12px;font-size:12px;color:var(--t2);margin-bottom:12px"><i class="fa-solid fa-circle-info" style="color:var(--br);margin-right:6px"></i><span id="scan-info">Take a clear photo of your receipt. AI reads the items, quantities and prices — free using Google Gemini.</span></div>
@@ -508,12 +512,12 @@ textarea.inp{resize:vertical;min-height:60px}
   </div>
 </div>
 
-<div id="ov" onclick="clov(event)"><div id="mb"><div class="mh"></div><div id="mc"></div></div></div>
+<div id="ov" onclick="clov(event)"><div id="mb"><div class="mh-wrap"><div class="mh"></div></div><div id="mc"></div></div></div>
 
 <!-- EDIT SALE MODAL — permanent static IDs, never conflict with main form -->
 <div id="edit-sale-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)">
   <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:700px;max-height:93vh;overflow-y:auto;padding:6px 16px 32px;animation:slideUp .22s ease">
-    <div class="mh"></div>
+    <div class="mh-wrap"><div class="mh"></div></div>
     <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-pen" style="color:var(--br);margin-right:8px"></i>Edit Sale</div><button class="m-x" onclick="closeEditSale()">×</button></div>
     <div class="r2">
       <div class="fld"><label class="lbl">Date</label><input class="inp" type="date" id="es-date"></div>
@@ -538,7 +542,7 @@ textarea.inp{resize:vertical;min-height:60px}
 <!-- EDIT PURCHASE MODAL — permanent static IDs -->
 <div id="edit-purch-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)">
   <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:700px;max-height:93vh;overflow-y:auto;padding:6px 16px 32px;animation:slideUp .22s ease">
-    <div class="mh"></div>
+    <div class="mh-wrap"><div class="mh"></div></div>
     <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-pen" style="color:var(--br);margin-right:8px"></i>Edit Purchase</div><button class="m-x" onclick="closeEditPurch()">×</button></div>
     <div class="r2">
       <div class="fld"><label class="lbl">Date</label><input class="inp" type="date" id="ep-date"></div>
@@ -562,7 +566,7 @@ textarea.inp{resize:vertical;min-height:60px}
 <!-- ATP REVIEW MODAL -->
 <div id="atp-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)" onclick="if(event.target===this)closeATP()">
   <div id="atp-box" style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding:6px 16px 32px;animation:slideUp .22s ease">
-    <div class="mh"></div>
+    <div class="mh-wrap"><div class="mh"></div></div>
     <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-cart-plus" style="color:var(--br);margin-right:8px"></i>Add to Purchase Drafts</div><button class="m-x" onclick="closeATP()">×</button></div>
     <div class="info-box"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>Review and edit items before adding to drafts. You can change names, UOM or quantities here without affecting the original sale.</div>
     <div id="atp-items"></div>
@@ -806,6 +810,66 @@ function toast(m,t=''){const el=$('toast');el.textContent=m;el.className='on'+(t
 function openM(h){$('mc').innerHTML=h;$('ov').classList.add('on');document.body.style.overflow='hidden';}
 function closeM(){$('ov').classList.remove('on');document.body.style.overflow='';S.eI=S.ePr=null;}
 function clov(e){if(e.target===$('ov'))closeM();}
+
+// ── Swipe the grabber bar down to close any bottom sheet ──
+(function(){
+  const closeFns={
+    'ov':()=>closeM(),
+    'edit-sale-modal':()=>closeEditSale(),
+    'edit-purch-modal':()=>closeEditPurch(),
+    'scan-modal':()=>closeScanner()
+  };
+  let sheet=null,overlay=null,y0=0,dy=0;
+  const yOf=e=>e.touches?e.touches[0].clientY:e.clientY;
+  function down(e){
+    const grip=e.target.closest('.mh-wrap,.mh,.m-hd');
+    if(!grip||e.target.closest('button,input,select,textarea,a'))return;
+    // the sheet is the panel holding the grip; the overlay is its parent
+    let s=grip.closest('.mh-wrap')?grip.closest('.mh-wrap').parentElement:grip.parentElement;
+    if(!s)return;
+    const o=s.parentElement;
+    if(!o||!closeFns[o.id])return;
+    sheet=s;overlay=o;y0=yOf(e);dy=0;
+    sheet.style.transition='none';
+    document.addEventListener('touchmove',move,{passive:false});
+    document.addEventListener('touchend',up);
+    document.addEventListener('touchcancel',up);
+    document.addEventListener('mousemove',move);
+    document.addEventListener('mouseup',up);
+  }
+  function move(e){
+    if(!sheet)return;
+    dy=yOf(e)-y0;
+    if(dy<0)dy=dy/4;              // slight resistance upward
+    if(e.cancelable)e.preventDefault();
+    sheet.style.transform='translateY('+dy+'px)';
+    overlay.style.background='rgba(0,0,0,'+Math.max(0,0.6-Math.max(dy,0)/700)+')';
+  }
+  function up(){
+    if(!sheet)return;
+    const s=sheet,o=overlay,d=dy;
+    const reset=()=>{s.style.transition='';s.style.transform='';o.style.background='';};
+    s.style.transition='transform .22s ease';
+    if(d>110){                     // far enough — dismiss
+      s.style.transform='translateY(100%)';
+      o.style.background='rgba(0,0,0,0)';
+      const fn=closeFns[o.id];
+      setTimeout(()=>{if(fn)fn();reset();},200);
+    }else{                         // snap back
+      s.style.transform='';
+      o.style.background='';
+      setTimeout(()=>{s.style.transition='';},220);
+    }
+    sheet=null;overlay=null;dy=0;
+    document.removeEventListener('touchmove',move);
+    document.removeEventListener('touchend',up);
+    document.removeEventListener('touchcancel',up);
+    document.removeEventListener('mousemove',move);
+    document.removeEventListener('mouseup',up);
+  }
+  document.addEventListener('touchstart',down,{passive:true});
+  document.addEventListener('mousedown',down);
+})();
 
 function toggleTheme(){const d=document.documentElement,t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);localStorage.setItem('lty_th',t);$('th-btn').innerHTML=t==='dark'?'<i class="fa-solid fa-sun"></i>':'<i class="fa-solid fa-moon"></i>';}
 function applyTheme(){const t=localStorage.getItem('lty_th')||'light';document.documentElement.setAttribute('data-theme',t);$('th-btn').innerHTML=t==='dark'?'<i class="fa-solid fa-sun"></i>':'<i class="fa-solid fa-moon"></i>';}
@@ -1234,7 +1298,7 @@ async function doSaveSale(){
   const btn=$('s-btn');const isE=false; // new sale only; editing handled by saveEditedSale()
   const cid=$('s-cust').value;
   if(!cid){toast('Select a customer','err');return;}
-  const cn=S.custs.find(c=>c.id===cid)?.name||'Unknown';
+  const cn=keepName||S.custs.find(c=>c.id===cid)?.name||'Unknown';
   const rows=getSaleRows();
   if(!rows.length){toast('Add at least one item with a quantity','err');return;}
   const autoTotal=rows.reduce((s,r)=>s+r.total,0);
@@ -1327,8 +1391,18 @@ let _eS=null;
 function editSale(id){
   _eS=id;const s=S.sales.find(x=>x.id===id);if(!s)return;
   $('es-date').value=s.entry_date;
-  $('es-cust').innerHTML='<option value="">Select...</option>'+S.custs.map(c=>`<option value="${c.id}"${c.name===s.customer_name?' selected':''}>${esc(c.name)}</option>`).join('');
-  $('es-notes').value='';$('es-manual-tot').value=s.amount>0?s.amount:'';
+  const sel=$('es-cust');
+  sel.innerHTML='<option value="">Select...</option>'+S.custs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  // match on the trimmed, case-insensitive name so odd spacing still selects
+  const want=(s.customer_name||'').trim().toLowerCase();
+  const hit=S.custs.find(c=>(c.name||'').trim().toLowerCase()===want);
+  if(hit){sel.value=hit.id;}
+  else if(s.customer_name){ // customer no longer in the list — keep it rather than blanking
+    const o=document.createElement('option');
+    o.value='keep:'+s.customer_name;o.textContent=s.customer_name+' (not in list)';
+    sel.appendChild(o);sel.value=o.value;
+  }
+  $('es-notes').value=s.notes||'';$('es-manual-tot').value=s.amount>0?s.amount:'';
   $('es-items-list').innerHTML='';rc.es=0;
   const si=getSI(id);const rows=si.length?si:parseNotesToRows(s.notes);
   if(rows.length){rows.forEach(r=>{const row=addESRow();fillRow(row,r,'es');});}else{addESRow();}
@@ -1338,7 +1412,9 @@ function editSale(id){
 function closeEditSale(){$('edit-sale-modal').style.display='none';document.body.style.overflow='';_eS=null;}
 async function saveEditedSale(){
   const btn=$('edit-sale-modal').querySelector('.btn-pr');
-  const cid=$('es-cust').value;if(!cid){toast('Select a customer','err');return;}
+  const rawCid=$('es-cust').value;if(!rawCid){toast('Select a customer','err');return;}
+  const keepName=rawCid.startsWith('keep:')?rawCid.slice(5):null;
+  const cid=keepName?null:rawCid;
   const rows=getESRows();if(!rows.length){toast('Add at least one item','err');return;}
   const autoTotal=rows.reduce((s,r)=>s+r.total,0);
   const manualTot=parseFloat($('es-manual-tot').value||0);
@@ -1349,7 +1425,7 @@ async function saveEditedSale(){
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   try{
     // Update sale record and items
-    await sb.from('daily_sales').update({entry_date:saleDate,customer_name:cn,market_customer_id:cid,amount:total,notes:$('es-notes').value||desc}).eq('id',_eS);
+    await sb.from('daily_sales').update({entry_date:saleDate,customer_name:cn,market_customer_id:cid||null,amount:total,notes:$('es-notes').value||desc}).eq('id',_eS);
     await sb.from('sale_items').delete().eq('sale_id',_eS);
     if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name),sort_order:i})));
     // Update prices learn
