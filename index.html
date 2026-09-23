@@ -2325,15 +2325,38 @@ function openScanner(mode){
     $('scan-info').textContent='Take a clear photo of your receipt. AI reads the items, quantities and prices — free using Google Gemini.';
     $('scan-sup-lbl').textContent='Supplier';
   }
-  const saved=localStorage.getItem('lty_gemini_key')||'';
-  $('scan-key').value=saved;
-  $('scan-key-section').style.display=saved?'none':'block';
+  const cached=localStorage.getItem('lty_gemini_key')||'';
+  $('scan-key').value=cached;
+  $('scan-key-section').style.display=cached?'none':'block';
   // Populate dropdown: suppliers for purchases, customers for sales
   if(_scanMode==='s'){
     $('scan-sup').innerHTML='<option value="">Customer...</option>'+S.custs.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
   }else{
     $('scan-sup').innerHTML=supOpts();
   }
+  // Refresh from Supabase in case this key was saved on a different browser/device
+  fetchGeminiKey().then(k=>{
+    if(k&&k!==cached){
+      localStorage.setItem('lty_gemini_key',k);
+      $('scan-key').value=k;
+      $('scan-key-section').style.display='none';
+    }
+  });
+}
+async function fetchGeminiKey(){
+  try{
+    if(!S.user?.id)return'';
+    const{data,error}=await sb.from('app_settings').select('gemini_key').eq('user_id',S.user.id).maybeSingle();
+    if(error||!data)return'';
+    return data.gemini_key||'';
+  }catch(e){return'';}
+}
+async function saveGeminiKey(key){
+  localStorage.setItem('lty_gemini_key',key);
+  try{
+    if(!S.user?.id)return;
+    await sb.from('app_settings').upsert({user_id:S.user.id,gemini_key:key,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+  }catch(e){/* offline — localStorage cache still has it, will sync next successful save */}
 }
 function closeScanner(){$('scan-modal').style.display='none';document.body.style.overflow='';_scanRows=[];const si=$('scan-input');if(si)si.value='';}
 function backToScan(){$('scan-step1').style.display='block';$('scan-step2').style.display='none';$('scan-preview').innerHTML='';const si=$('scan-input');if(si)si.value='';}
@@ -2345,7 +2368,7 @@ function startScan(source){
     $('scan-key').focus();
     return;
   }
-  localStorage.setItem('lty_gemini_key',key);
+  saveGeminiKey(key);
   if(source==='gallery'){
     $('scan-input-gallery').click();
   }else{
