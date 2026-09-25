@@ -149,10 +149,12 @@ textarea.inp{resize:vertical;min-height:60px}
 .rtot{background:var(--surf)!important;font-weight:700;text-align:right}
 .entry-total{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surf);border-radius:var(--rs);margin:10px 0 6px;font-weight:700;font-size:15px}
 .ac-wrap{position:relative}
-.ac-drop{display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--br);border-radius:var(--rs);box-shadow:var(--sh2);z-index:50;max-height:180px;overflow-y:auto}
-.ac-item{padding:8px 12px;font-size:13px;cursor:pointer;color:var(--t1);border-bottom:1px solid var(--bdr)}
+.ac-drop{display:none;position:fixed;background:var(--card);border:1.5px solid var(--br);border-radius:var(--rs);box-shadow:var(--sh2);z-index:500;max-height:180px;overflow-y:auto}
+.ac-item{padding:13px 14px;font-size:15px;line-height:1.35;cursor:pointer;color:var(--t1);border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;gap:10px}
 .ac-item:last-child{border-bottom:none}
 .ac-item:hover,.ac-item:active{background:var(--brl);color:var(--br)}
+.ac-item span:first-child{font-weight:700}
+.ac-item span:last-child{color:var(--t3);font-size:12px;white-space:nowrap}
 .tx{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:flex-start;gap:10px}
 .tx:last-child{border-bottom:none}
 .tx-l{flex:1;min-width:0}
@@ -1285,11 +1287,31 @@ function onAC(inp,type){
     const sell=p.sell_price>0?`RM ${fmt(p.sell_price)}`:'no price';
     const cost=p.cost_price>0?`RM ${fmt(p.cost_price)}`:'no price';
     const uomStr=p.unit?`${esc(p.unit)} · `:'';
-    return`<div class="ac-item" onmousedown="selAC(event,this,'${type}')" ontouchstart="selAC(event,this,'${type}')" data-nm="${esc(p.name)}" data-uom="${esc(p.unit||'')}" data-sell="${p.sell_price||0}" data-cost="${p.cost_price||0}" data-sup="${esc(p.default_supplier||'')}"><span style="font-weight:600">${esc(p.name)}</span><span style="color:var(--t3);font-size:11px;margin-left:6px">${uomStr}${isSaleType?sell:cost}</span></div>`;
+    return`<div class="ac-item" onmousedown="selAC(event,this,'${type}')" ontouchstart="selAC(event,this,'${type}')" data-nm="${esc(p.name)}" data-uom="${esc(p.unit||'')}" data-sell="${p.sell_price||0}" data-cost="${p.cost_price||0}" data-sup="${esc(p.default_supplier||'')}"><span>${esc(p.name)}</span><span>${uomStr}${isSaleType?sell:cost}</span></div>`;
   }).join('');
   drop.style.display='block';
+  placeAC(inp,drop);
+}
+function placeAC(inp,drop){
+  const r=inp.getBoundingClientRect();
+  const spaceBelow=window.innerHeight-r.bottom-12;
+  const spaceAbove=r.top-12;
+  const openUp=spaceBelow<160&&spaceAbove>spaceBelow;
+  drop.style.left=r.left+'px';
+  drop.style.width=r.width+'px';
+  if(openUp){
+    drop.style.bottom=(window.innerHeight-r.top+4)+'px';
+    drop.style.top='auto';
+    drop.style.maxHeight=Math.min(320,spaceAbove)+'px';
+  }else{
+    drop.style.top=(r.bottom+4)+'px';
+    drop.style.bottom='auto';
+    drop.style.maxHeight=Math.min(320,spaceBelow)+'px';
+  }
 }
 function hideAC(inp){setTimeout(()=>{const d=inp.nextElementSibling;if(d)d.style.display='none';},350);}
+window.addEventListener('scroll',()=>{document.querySelectorAll('.ac-drop').forEach(d=>{if(d.style.display==='block'){const inp=d.previousElementSibling;if(inp)placeAC(inp,d);}});},true);
+window.addEventListener('resize',()=>{document.querySelectorAll('.ac-drop').forEach(d=>{if(d.style.display==='block'){const inp=d.previousElementSibling;if(inp)placeAC(inp,d);}});});
 function selAC(e,item,type){
   e.preventDefault(); // prevents blur on both touch and mouse, keeping dropdown open until we're done
   const row=item.closest('.ie-row,.ie-p-row');
