@@ -541,6 +541,7 @@ textarea.inp{resize:vertical;min-height:60px}
         <div style="font-size:12px;color:var(--t2)"><i class="fa-solid fa-circle-check" style="color:var(--grn);margin-right:6px"></i><span id="batch-summary"></span></div>
         <button class="btn btn-sm" onclick="startBatchScan()"><i class="fa-solid fa-plus"></i> Add more</button>
       </div>
+      <div class="fld" style="margin-bottom:10px"><label class="lbl">Purchase date <span style="font-weight:400;color:var(--t3)">— applied to all receipts below</span></label><input class="inp" type="date" id="batch-date"></div>
       <div id="batch-queue"></div>
       <div class="btn-row" style="margin-top:14px">
         <button class="btn btn-pr btn-fw" id="batch-save-btn" onclick="saveAllBatch()"><i class="fa-solid fa-check-double"></i> Save all as purchases</button>
@@ -2579,12 +2580,39 @@ function confirmScan(){
 // ── BATCH RECEIPT SCANNER (multiple purchase receipts in one shot) ──
 let _batchQueue=[]; // {id,file,previewUrl,status:'pending'|'ok'|'err',supplier,supNew,rows:[{name,uom,qty,unit_price}],error}
 const PURCH_PROMPT='This is a purchase receipt from a supplier in Malaysia. Extract the SUPPLIER/SHOP NAME and ALL items purchased. Return ONLY a raw JSON object, no markdown, no backticks, no explanations. Format: {"supplier":"Shop Name","items":[{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]}. Rules for supplier: use the business/shop/trading name printed at the top of the receipt (e.g. "Boon Yee", "33 Noodles & Sprouts", "NSK"). Ignore addresses, phone numbers, registration numbers and words like RECEIPT, INVOICE, BILL, TAX INVOICE. If the receipt shows no business name at all (a plain handwritten cash slip), return "" for supplier. Rules for items: qty is the quantity number; unit is the unit shown (kg, pcs, pkt, ctn, box, nos etc) or empty string if none; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Use the item names exactly as written on the receipt.';
+const BATCH_CONCURRENCY=3; // how many receipts to send to Gemini at once — kept modest to avoid free-tier rate limit errors
+
+// Remembers a supplier-name fix once you make it (e.g. AI read "AhSeng Trdng", you typed "Ah Seng Trading") —
+// so the next receipt from the same shop is auto-corrected instead of needing the same fix again.
+function getSupCorrections(){try{return JSON.parse(localStorage.getItem('lty_batch_sup_fix')||'{}');}catch(e){return{};}}
+function saveSupCorrection(raw,corrected){
+  if(!raw||!corrected)return;
+  const rn=normNm(raw),cn=normNm(corrected);
+  if(!rn||rn===cn)return;
+  const m=getSupCorrections();m[rn]=corrected;
+  try{localStorage.setItem('lty_batch_sup_fix',JSON.stringify(m));}catch(e){}
+}
+// Given the AI's raw supplier text, apply any remembered correction, then match it against known suppliers
+// (same fuzzy-match logic as the single-receipt scanner). Returns {supplier, isNew}.
+function resolveBatchSupplier(rawSupplier){
+  const corr=getSupCorrections();
+  const fixed=corr[normNm(rawSupplier)]||rawSupplier;
+  const known=[...new Set([...S.sups.map(s=>s.name),...S.purch.map(p=>p.supplier_name).filter(Boolean)])];
+  const n=normNm(fixed);
+  if(!n){
+    const pick=known.find(s=>normNm(s)==='cash bill')||'Cash Bill';
+    return{supplier:pick,isNew:!known.some(s=>normNm(s)===normNm(pick))};
+  }
+  const hit=known.find(s=>normNm(s)===n)||known.find(s=>normNm(s).includes(n)||n.includes(normNm(s)));
+  return hit?{supplier:hit,isNew:false}:{supplier:fixed,isNew:true};
+}
 
 function openBatchScanner(){
   _batchQueue=[];
   $('batch-scan-modal').style.display='flex';document.body.style.overflow='hidden';
   $('batch-step1').style.display='block';$('batch-step2').style.display='none';
   $('batch-progress').style.display='none';
+  if($('batch-date'))$('batch-date').value=today();
   const cached=localStorage.getItem('lty_gemini_key')||'';
   $('batch-key').value=cached;
   $('batch-key-section').style.display=cached?'none':'block';
@@ -2649,36 +2677,40 @@ async function onBatchFiles(input){
   const startIdx=_batchQueue.length;
   for(const file of files){
     const previewUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(file);});
-    _batchQueue.push({id:'b'+Date.now()+Math.random().toString(36).slice(2),file,previewUrl,status:'pending',supplier:'',supNew:false,rows:[],error:''});
+    _batchQueue.push({id:'b'+Date.now()+Math.random().toString(36).slice(2),file,previewUrl,status:'pending',supplier:'',supNew:false,_rawSupplier:'',rows:[],error:''});
   }
   $('batch-step1').style.display='none';$('batch-step2').style.display='block';
   renderBatchQueue();
-  // Process sequentially — gentle on the free-tier rate limit, and each result appears as it's ready
-  for(let i=startIdx;i<_batchQueue.length;i++){
-    const item=_batchQueue[i];
-    $('batch-progress-txt').textContent=`Reading receipt ${i-startIdx+1} of ${_batchQueue.length-startIdx}...`;
-    try{
-      const{supplier,rows}=await scanOnePurchaseImage(item.file,apiKey);
-      item.rows=rows;
-      // Resolve supplier against known suppliers, same matching logic as the single scanner
-      const known=[...new Set([...S.sups.map(s=>s.name),...S.purch.map(p=>p.supplier_name).filter(Boolean)])];
-      const n=normNm(supplier);
-      if(!n){
-        item.supplier=known.find(s=>normNm(s)==='cash bill')||'Cash Bill';
-        item.supNew=!known.some(s=>normNm(s)===normNm(item.supplier));
-      }else{
-        const hit=known.find(s=>normNm(s)===n)||known.find(s=>normNm(s).includes(n)||n.includes(normNm(s)));
-        if(hit){item.supplier=hit;item.supNew=false;}else{item.supplier=supplier;item.supNew=true;}
-      }
-      item.status='ok';
-    }catch(e){
-      item.status='err';item.error=e.message;
-    }
-    renderBatchQueue();
-    if(i<_batchQueue.length-1)await new Promise(r=>setTimeout(r,600)); // small gap between API calls
-  }
+  await processBatchRange(startIdx,_batchQueue.length);
   $('batch-progress').style.display='none';
   input.value='';
+}
+// Runs receipts [start,end) through Gemini with up to BATCH_CONCURRENCY in flight at once —
+// much faster than one-by-one, while staying modest enough to avoid free-tier rate limit errors.
+async function processBatchRange(start,end){
+  const total=end-start;
+  let done=0,next=start;
+  $('batch-progress-txt').textContent=`Reading receipts... (0 of ${total})`;
+  async function worker(){
+    while(next<end){
+      const i=next++;
+      const item=_batchQueue[i];
+      try{
+        const{supplier,rows}=await scanOnePurchaseImage(item.file,($('batch-key').value||localStorage.getItem('lty_gemini_key')||'').trim());
+        item.rows=rows;
+        item._rawSupplier=supplier;
+        const{supplier:resolved,isNew}=resolveBatchSupplier(supplier);
+        item.supplier=resolved;item.supNew=isNew;
+        item.status='ok';
+      }catch(e){
+        item.status='err';item.error=e.message;
+      }
+      done++;
+      $('batch-progress-txt').textContent=`Reading receipts... (${done} of ${total})`;
+      renderBatchQueue();
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(BATCH_CONCURRENCY,total)},worker));
 }
 function renderBatchQueue(){
   const okCount=_batchQueue.filter(q=>q.status==='ok').length;
@@ -2730,10 +2762,9 @@ async function retryBatchItem(qi){
   try{
     const{supplier,rows}=await scanOnePurchaseImage(item.file,apiKey);
     item.rows=rows;
-    const known=[...new Set([...S.sups.map(s=>s.name),...S.purch.map(p=>p.supplier_name).filter(Boolean)])];
-    const n=normNm(supplier);
-    if(!n){item.supplier=known.find(s=>normNm(s)==='cash bill')||'Cash Bill';item.supNew=!known.some(s=>normNm(s)===normNm(item.supplier));}
-    else{const hit=known.find(s=>normNm(s)===n)||known.find(s=>normNm(s).includes(n)||n.includes(normNm(s)));if(hit){item.supplier=hit;item.supNew=false;}else{item.supplier=supplier;item.supNew=true;}}
+    item._rawSupplier=supplier;
+    const{supplier:resolved,isNew}=resolveBatchSupplier(supplier);
+    item.supplier=resolved;item.supNew=isNew;
     item.status='ok';
   }catch(e){item.status='err';item.error=e.message;}
   renderBatchQueue();
@@ -2741,12 +2772,15 @@ async function retryBatchItem(qi){
 async function saveAllBatch(){
   const valid=_batchQueue.filter(q=>q.status==='ok'&&q.rows.some(r=>r.name.trim()&&r.qty>0));
   if(!valid.length){toast('No completed receipts ready to save','err');return;}
+  const entryDate=$('batch-date')?.value||today();
   const btn=$('batch-save-btn');btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   let saved=0,failed=0;
   for(const item of valid){
     try{
       const rows=item.rows.filter(r=>r.name.trim()&&r.qty>0);
       const sup=(item.supplier||'Cash Bill').trim();
+      // Remember any correction the user made to the AI-read supplier name, so future scans of this shop auto-correct
+      if(item._rawSupplier)saveSupCorrection(item._rawSupplier,sup);
       if(sup&&!S.sups.some(s=>normNm(s.name)===normNm(sup))){
         const{error}=await sb.from('suppliers').insert({name:sup});
         if(!error)S.sups.push({name:sup});
@@ -2754,11 +2788,11 @@ async function saveAllBatch(){
       const total=rows.reduce((s,r)=>s+r.qty*r.unit_price,0);
       const desc=rows.map(r=>`${r.name} x${r.qty}`).join(', ');
       const supId=S.sups.find(s=>s.name===sup)?.id;
-      const{data:p,error:pErr}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:'Batch scanned'}).select().single();
+      const{data:p,error:pErr}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:entryDate,supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:'Batch scanned'}).select().single();
       if(pErr)throw pErr;
       await sb.from('purchase_items').insert(rows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,product_id:pidOf(r.name),sort_order:i})));
       rows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(pr){if(r.unit_price>0)sb.from('prices').update({cost_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',pr.id).then();}else if(r.name){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
-      logAct('create',`Purchase (batch scan): ${sup} — RM ${fmt(total)} (${today()})`);
+      logAct('create',`Purchase (batch scan): ${sup} — RM ${fmt(total)} (${entryDate})`);
       saved++;
     }catch(e){failed++;}
   }
