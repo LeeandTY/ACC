@@ -366,6 +366,7 @@ textarea.inp{resize:vertical;min-height:60px}
       </div>
       <button class="btn btn-pr btn-fw" id="p-btn" onclick="doSavePurch()" style="margin-top:6px"><i class="fa-solid fa-check"></i> Record purchase</button>
       <button class="btn btn-fw" onclick="openScanner()" style="margin-top:8px;background:var(--surf);border:1px solid var(--bdr)"><i class="fa-solid fa-camera" style="color:var(--br);margin-right:6px"></i>Scan Receipt with AI <span style="font-size:10px;background:var(--gnl);color:var(--grn);padding:2px 6px;border-radius:8px;margin-left:4px;font-weight:700">FREE</span></button>
+      <button class="btn btn-fw" onclick="openBatchScanner()" style="margin-top:8px;background:var(--surf);border:1px solid var(--bdr)"><i class="fa-solid fa-layer-group" style="color:var(--br);margin-right:6px"></i>Scan Multiple Receipts <span style="font-size:10px;background:var(--gnl);color:var(--grn);padding:2px 6px;border-radius:8px;margin-left:4px;font-weight:700">FREE</span></button>
     </div></div>
   </div>
   <div id="p-hist" style="display:none">
@@ -508,6 +509,43 @@ textarea.inp{resize:vertical;min-height:60px}
         <button class="btn" onclick="backToScan()">Re-scan</button>
         <button class="btn" onclick="closeScanner()">Cancel</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- BATCH RECEIPT SCANNER MODAL -->
+<div id="batch-scan-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-end;justify-content:center">
+  <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:700px;max-height:93vh;overflow-y:auto;padding:6px 16px 32px">
+    <div class="mh-wrap"><div class="mh"></div></div>
+    <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-layer-group" style="color:var(--br);margin-right:8px"></i>Scan Multiple Receipts</div><button class="m-x" onclick="closeBatchScanner()">×</button></div>
+    <div id="batch-step1">
+      <div style="background:var(--surf);border-radius:var(--rs);padding:10px 12px;font-size:12px;color:var(--t2);margin-bottom:12px"><i class="fa-solid fa-circle-info" style="color:var(--br);margin-right:6px"></i>Pick all your receipt photos in one go. Each one is read separately by AI — review and fix any mistakes before saving, then save them all as separate purchases in one tap.</div>
+      <div id="batch-key-section" class="fld">
+        <label class="lbl">Google AI Key <span style="font-weight:400;color:var(--t3)">— free, one-time setup</span></label>
+        <input class="inp" type="password" id="batch-key" placeholder="AIza...">
+        <div style="font-size:11px;color:var(--t3);margin-top:4px;line-height:1.5">Get your FREE key: go to <b>aistudio.google.com</b> → sign in with Google → Get API key → Create API key → copy &amp; paste here. No credit card needed.</div>
+      </div>
+      <div style="text-align:center;padding:14px 0">
+        <input type="file" id="batch-input" accept="image/*" multiple style="display:none" onchange="onBatchFiles(this)">
+        <button class="btn btn-pr btn-fw" style="padding:14px 8px;font-size:14px" onclick="startBatchScan()">
+          <i class="fa-solid fa-images" style="font-size:16px;margin-right:6px"></i>Choose Receipt Photos
+        </button>
+      </div>
+      <div id="batch-progress" style="display:none;text-align:center;color:var(--t3);font-size:13px;padding:8px 0">
+        <span class="spin" style="border-top-color:var(--br)"></span>
+        <span id="batch-progress-txt" style="margin-left:8px">Reading receipts...</span>
+      </div>
+    </div>
+    <div id="batch-step2" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--t2)"><i class="fa-solid fa-circle-check" style="color:var(--grn);margin-right:6px"></i><span id="batch-summary"></span></div>
+        <button class="btn btn-sm" onclick="startBatchScan()"><i class="fa-solid fa-plus"></i> Add more</button>
+      </div>
+      <div id="batch-queue"></div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-pr btn-fw" id="batch-save-btn" onclick="saveAllBatch()"><i class="fa-solid fa-check-double"></i> Save all as purchases</button>
+      </div>
+      <button class="btn btn-fw" style="margin-top:8px" onclick="closeBatchScanner()">Cancel</button>
     </div>
   </div>
 </div>
@@ -2536,6 +2574,198 @@ function confirmScan(){
     if(addTab)ptab('add',addTab);
     toast(rows.length+(appendP?' more items added — now '+(haveP+rows.length)+' in total':' items added — check supplier & prices, then Record'),'ok');
   }
+}
+
+// ── BATCH RECEIPT SCANNER (multiple purchase receipts in one shot) ──
+let _batchQueue=[]; // {id,file,previewUrl,status:'pending'|'ok'|'err',supplier,supNew,rows:[{name,uom,qty,unit_price}],error}
+const PURCH_PROMPT='This is a purchase receipt from a supplier in Malaysia. Extract the SUPPLIER/SHOP NAME and ALL items purchased. Return ONLY a raw JSON object, no markdown, no backticks, no explanations. Format: {"supplier":"Shop Name","items":[{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]}. Rules for supplier: use the business/shop/trading name printed at the top of the receipt (e.g. "Boon Yee", "33 Noodles & Sprouts", "NSK"). Ignore addresses, phone numbers, registration numbers and words like RECEIPT, INVOICE, BILL, TAX INVOICE. If the receipt shows no business name at all (a plain handwritten cash slip), return "" for supplier. Rules for items: qty is the quantity number; unit is the unit shown (kg, pcs, pkt, ctn, box, nos etc) or empty string if none; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Use the item names exactly as written on the receipt.';
+
+function openBatchScanner(){
+  _batchQueue=[];
+  $('batch-scan-modal').style.display='flex';document.body.style.overflow='hidden';
+  $('batch-step1').style.display='block';$('batch-step2').style.display='none';
+  $('batch-progress').style.display='none';
+  const cached=localStorage.getItem('lty_gemini_key')||'';
+  $('batch-key').value=cached;
+  $('batch-key-section').style.display=cached?'none':'block';
+  fetchGeminiKey().then(k=>{
+    if(k&&k!==cached){localStorage.setItem('lty_gemini_key',k);$('batch-key').value=k;$('batch-key-section').style.display='none';}
+  });
+}
+function closeBatchScanner(){
+  $('batch-scan-modal').style.display='none';document.body.style.overflow='';
+  _batchQueue=[];const bi=$('batch-input');if(bi)bi.value='';
+}
+function startBatchScan(){
+  const key=($('batch-key').value||'').trim();
+  if(!key){$('batch-key-section').style.display='block';toast('Enter your free Google AI key first','err');$('batch-key').focus();return;}
+  saveGeminiKey(key);
+  $('batch-input').click();
+}
+// One receipt image → Gemini → {supplier, items[]}. Shares the same model-fallback chain as the single scanner.
+async function scanOnePurchaseImage(file,apiKey){
+  const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('Could not read image'));r.readAsDataURL(file);});
+  const models=['gemini-3.6-flash','gemini-3.5-flash','gemini-2.5-flash'];
+  let data=null,lastErr='';
+  for(const model of models){
+    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||'image/jpeg',data:b64}},{text:PURCH_PROMPT}]}],generationConfig:{temperature:0}})
+    });
+    if(resp.ok){data=await resp.json();break;}
+    const errBody=await resp.json().catch(()=>({}));
+    const msg=errBody?.error?.message||`HTTP ${resp.status}`;
+    if(resp.status===400&&/API key/i.test(msg))throw new Error('Invalid API key');
+    if(resp.status===429)throw new Error('Daily free limit reached');
+    if(resp.status===404||/not found|deprecated|not supported/i.test(msg)){lastErr=msg;continue;}
+    throw new Error(msg);
+  }
+  if(!data)throw new Error(lastErr||'No available model');
+  const text=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').trim().replace(/```json|```/g,'').trim();
+  if(!text)throw new Error('AI returned no result');
+  let parsed;
+  try{parsed=JSON.parse(text);}catch(_){
+    const mo=text.match(/\{[\s\S]*\}/);
+    if(!mo)throw new Error('Could not read receipt');
+    parsed=JSON.parse(mo[0]);
+  }
+  const items=Array.isArray(parsed?.items)?parsed.items:null;
+  if(!items||!items.length)throw new Error('No items found');
+  return{
+    supplier:parsed.supplier?String(parsed.supplier).trim():'',
+    rows:items.map(i=>{
+      const rawNm=String(i.name||'').trim();
+      const mp=resolveP(rawNm);
+      return{name:mp?mp.name:rawNm,uom:String(i.unit||i.uom||'').trim(),qty:parseFloat(i.qty)||1,unit_price:parseFloat(i.price)||0};
+    }).filter(r=>r.name)
+  };
+}
+async function onBatchFiles(input){
+  const files=input.files?[...input.files]:[];
+  if(!files.length)return;
+  const apiKey=($('batch-key').value||localStorage.getItem('lty_gemini_key')||'').trim();
+  if(!apiKey){toast('Enter your Google AI key first','err');return;}
+  $('batch-progress').style.display='block';
+  const startIdx=_batchQueue.length;
+  for(const file of files){
+    const previewUrl=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(file);});
+    _batchQueue.push({id:'b'+Date.now()+Math.random().toString(36).slice(2),file,previewUrl,status:'pending',supplier:'',supNew:false,rows:[],error:''});
+  }
+  $('batch-step1').style.display='none';$('batch-step2').style.display='block';
+  renderBatchQueue();
+  // Process sequentially — gentle on the free-tier rate limit, and each result appears as it's ready
+  for(let i=startIdx;i<_batchQueue.length;i++){
+    const item=_batchQueue[i];
+    $('batch-progress-txt').textContent=`Reading receipt ${i-startIdx+1} of ${_batchQueue.length-startIdx}...`;
+    try{
+      const{supplier,rows}=await scanOnePurchaseImage(item.file,apiKey);
+      item.rows=rows;
+      // Resolve supplier against known suppliers, same matching logic as the single scanner
+      const known=[...new Set([...S.sups.map(s=>s.name),...S.purch.map(p=>p.supplier_name).filter(Boolean)])];
+      const n=normNm(supplier);
+      if(!n){
+        item.supplier=known.find(s=>normNm(s)==='cash bill')||'Cash Bill';
+        item.supNew=!known.some(s=>normNm(s)===normNm(item.supplier));
+      }else{
+        const hit=known.find(s=>normNm(s)===n)||known.find(s=>normNm(s).includes(n)||n.includes(normNm(s)));
+        if(hit){item.supplier=hit;item.supNew=false;}else{item.supplier=supplier;item.supNew=true;}
+      }
+      item.status='ok';
+    }catch(e){
+      item.status='err';item.error=e.message;
+    }
+    renderBatchQueue();
+    if(i<_batchQueue.length-1)await new Promise(r=>setTimeout(r,600)); // small gap between API calls
+  }
+  $('batch-progress').style.display='none';
+  input.value='';
+}
+function renderBatchQueue(){
+  const okCount=_batchQueue.filter(q=>q.status==='ok').length;
+  const errCount=_batchQueue.filter(q=>q.status==='err').length;
+  const pendCount=_batchQueue.filter(q=>q.status==='pending').length;
+  $('batch-summary').textContent=`${_batchQueue.length} receipt${_batchQueue.length===1?'':'s'} — ${okCount} read`+(pendCount?`, ${pendCount} pending`:'')+(errCount?`, ${errCount} failed`:'');
+  $('batch-queue').innerHTML=_batchQueue.map((q,qi)=>{
+    const total=q.rows.reduce((s,r)=>s+(r.qty||0)*(r.unit_price||0),0);
+    const statusBadge=q.status==='pending'
+      ?'<span class="spin" style="border-top-color:var(--br);width:12px;height:12px"></span>'
+      :q.status==='err'
+        ?`<span style="color:var(--red);font-size:11px"><i class="fa-solid fa-triangle-exclamation"></i> ${esc(q.error)}</span>`
+        :'<span style="color:var(--grn);font-size:11px"><i class="fa-solid fa-circle-check"></i> Read</span>';
+    return`<div style="border:1px solid var(--bdr);border-radius:var(--rs);padding:10px;margin-bottom:10px;background:var(--surf)">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <img src="${q.previewUrl}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0" alt="receipt">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+            ${q.status==='ok'
+              ?`<input class="inp sm" style="font-weight:700;flex:1" value="${esc(q.supplier)}" oninput="_batchQueue[${qi}].supplier=this.value" placeholder="Supplier">`
+              :`<span style="font-size:12px;color:var(--t3)">Receipt ${qi+1}</span>`}
+            <button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px" onclick="removeBatchItem(${qi})" title="Remove"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          <div style="margin-top:4px">${statusBadge}</div>
+        </div>
+      </div>
+      ${q.status==='ok'?`
+      <div style="margin-top:8px">
+        ${q.rows.map((r,ri)=>`
+        <div style="display:grid;grid-template-columns:1fr 46px 44px 60px 20px;gap:4px;margin-bottom:4px;align-items:center">
+          <input class="inp sm" placeholder="Item" value="${esc(r.name)}" oninput="_batchQueue[${qi}].rows[${ri}].name=this.value">
+          <input class="inp sm" placeholder="UOM" value="${esc(r.uom)}" oninput="_batchQueue[${qi}].rows[${ri}].uom=this.value">
+          <input class="inp sm" type="number" inputmode="decimal" value="${r.qty||''}" step="any" style="text-align:right" oninput="_batchQueue[${qi}].rows[${ri}].qty=parseFloat(this.value)||0;renderBatchQueue()">
+          <input class="inp sm" type="number" inputmode="decimal" value="${r.unit_price||''}" step="0.01" style="text-align:right" oninput="_batchQueue[${qi}].rows[${ri}].unit_price=parseFloat(this.value)||0;renderBatchQueue()">
+          <button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0" onclick="_batchQueue[${qi}].rows.splice(${ri},1);renderBatchQueue()">×</button>
+        </div>`).join('')}
+        <button class="btn btn-sm" onclick="_batchQueue[${qi}].rows.push({name:'',uom:'',qty:1,unit_price:0});renderBatchQueue()" style="margin-top:2px">+ Add item</button>
+        <div style="text-align:right;font-size:12px;font-weight:700;color:var(--red);margin-top:4px">RM ${fmt(total)}</div>
+      </div>`:q.status==='err'?`<button class="btn btn-sm" style="margin-top:6px" onclick="retryBatchItem(${qi})"><i class="fa-solid fa-rotate-right"></i> Retry this receipt</button>`:''}
+    </div>`;
+  }).join('');
+}
+function removeBatchItem(qi){_batchQueue.splice(qi,1);renderBatchQueue();}
+async function retryBatchItem(qi){
+  const item=_batchQueue[qi];if(!item)return;
+  const apiKey=($('batch-key').value||localStorage.getItem('lty_gemini_key')||'').trim();
+  if(!apiKey){toast('Enter your Google AI key first','err');return;}
+  item.status='pending';item.error='';renderBatchQueue();
+  try{
+    const{supplier,rows}=await scanOnePurchaseImage(item.file,apiKey);
+    item.rows=rows;
+    const known=[...new Set([...S.sups.map(s=>s.name),...S.purch.map(p=>p.supplier_name).filter(Boolean)])];
+    const n=normNm(supplier);
+    if(!n){item.supplier=known.find(s=>normNm(s)==='cash bill')||'Cash Bill';item.supNew=!known.some(s=>normNm(s)===normNm(item.supplier));}
+    else{const hit=known.find(s=>normNm(s)===n)||known.find(s=>normNm(s).includes(n)||n.includes(normNm(s)));if(hit){item.supplier=hit;item.supNew=false;}else{item.supplier=supplier;item.supNew=true;}}
+    item.status='ok';
+  }catch(e){item.status='err';item.error=e.message;}
+  renderBatchQueue();
+}
+async function saveAllBatch(){
+  const valid=_batchQueue.filter(q=>q.status==='ok'&&q.rows.some(r=>r.name.trim()&&r.qty>0));
+  if(!valid.length){toast('No completed receipts ready to save','err');return;}
+  const btn=$('batch-save-btn');btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
+  let saved=0,failed=0;
+  for(const item of valid){
+    try{
+      const rows=item.rows.filter(r=>r.name.trim()&&r.qty>0);
+      const sup=(item.supplier||'Cash Bill').trim();
+      if(sup&&!S.sups.some(s=>normNm(s.name)===normNm(sup))){
+        const{error}=await sb.from('suppliers').insert({name:sup});
+        if(!error)S.sups.push({name:sup});
+      }
+      const total=rows.reduce((s,r)=>s+r.qty*r.unit_price,0);
+      const desc=rows.map(r=>`${r.name} x${r.qty}`).join(', ');
+      const supId=S.sups.find(s=>s.name===sup)?.id;
+      const{data:p,error:pErr}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:'Batch scanned'}).select().single();
+      if(pErr)throw pErr;
+      await sb.from('purchase_items').insert(rows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,product_id:pidOf(r.name),sort_order:i})));
+      rows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(pr){if(r.unit_price>0)sb.from('prices').update({cost_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',pr.id).then();}else if(r.name){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
+      logAct('create',`Purchase (batch scan): ${sup} — RM ${fmt(total)} (${today()})`);
+      saved++;
+    }catch(e){failed++;}
+  }
+  btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check-double"></i> Save all as purchases';
+  closeBatchScanner();
+  await loadAll();rDash();
+  toast(saved+' purchase'+(saved===1?'':'s')+' saved'+(failed?', '+failed+' failed — try those again':''),failed?'err':'ok');
 }
 
 // ── WHATSAPP PDF ──
