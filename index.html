@@ -237,7 +237,7 @@ textarea.inp{resize:vertical;min-height:60px}
 </div>
 
 <div id="topbar">
-  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.4 · Pasar Pudu</small></div>
+  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.5 · Pasar Pudu</small></div>
   <div class="tb-ri">
     <button class="tbn" id="th-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbn" onclick="doSync()"><i class="fa-solid fa-arrows-rotate" id="sync-ic"></i></button>
@@ -434,6 +434,7 @@ textarea.inp{resize:vertical;min-height:60px}
   <div class="filter-row">
     <input class="inp sm" id="pr-q" placeholder="Search..." oninput="rPrices()" style="flex:1">
     <select class="inp sm" id="pr-cf" onchange="rPrices()" style="max-width:140px"><option value="">All cats</option></select>
+    <button class="btn btn-sm" onclick="openCustPrices()" title="Special prices per customer"><i class="fa-solid fa-user-tag"></i> Customer prices</button>
     <button class="btn btn-pr btn-sm" onclick="openPriceForm(null)"><i class="fa-solid fa-plus"></i> Add</button>
   </div>
   <div id="pr-bd"></div>
@@ -562,7 +563,7 @@ textarea.inp{resize:vertical;min-height:60px}
     <div class="m-hd"><div class="m-ti"><i class="fa-solid fa-pen" style="color:var(--br);margin-right:8px"></i>Edit Sale</div><button class="m-x" onclick="closeEditSale()">×</button></div>
     <div class="r2">
       <div class="fld"><label class="lbl">Date</label><input class="inp" type="date" id="es-date"></div>
-      <div class="fld"><label class="lbl">Customer</label><select class="inp" id="es-cust"><option value="">Select...</option></select></div>
+      <div class="fld"><label class="lbl">Customer</label><select class="inp" id="es-cust" onchange="repriceRows('es-items-list',this.value)"><option value="">Select...</option></select></div>
     </div>
     <div class="fld"><label class="lbl">Notes <span style="font-weight:400;color:var(--t3)">(optional)</span></label><input class="inp" id="es-notes" placeholder="e.g. Credit, paid cash..."></div>
     <div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:10px"><i class="fa-solid fa-box-open" style="color:var(--br);margin-right:6px"></i>Items sold</div>
@@ -626,7 +627,7 @@ const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 const ECATS=['Rent','Transport','Packaging','Utilities','Marketing','Salary','Other'];
 let sb,_chart,_repChart;
 const S={
-  user:null,custs:[],sups:[],clients:[],prices:[],aliases:[],pAll:[],recon:[],
+  user:null,custs:[],sups:[],clients:[],prices:[],aliases:[],pAll:[],recon:[],cpo:[],
   sales:[],sItems:[],purch:[],pItems:[],invs:[],pays:[],exps:[],drafts:[],
   eS:null,eP:null,eI:null,ePr:null,dFrom:'',dTo:'',
   cfg:{company:'Lee & TY Trading',address:'Pasar Pudu, Kuala Lumpur',phone:'',regNo:'',sstOn:false,sstRate:6,creditDays:30,terms:'',expCats:[...ECATS],itemCats:['Vegetables','Meat','Seafood','Fruits','Beverages','Frozen Food','Noodles','Dry Goods','Others']},
@@ -950,7 +951,7 @@ function saveCfg(){localStorage.setItem('lty_cfg',JSON.stringify(S.cfg));toast('
 
 async function loadAll(){
   const uid=S.user.id;
-  const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr,al,pall,rm]=await Promise.all([
+  const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr,al,pall,rm,cpo]=await Promise.all([
     sb.from('market_customers').select('*').order('name'),
     sb.from('suppliers').select('*').order('name'),
     sb.from('clients').select('*').order('name'),
@@ -966,11 +967,13 @@ async function loadAll(){
     sb.from('product_aliases').select('*'),
     sb.from('prices').select('id,name,unit,category,code,active'),
     sb.from('recon_marks').select('*'),
+    sb.from('customer_price_overrides').select('*'),
   ]);
   S.custs=cu.data||[];S.sups=su.data||[];S.clients=cl.data||[];
   S.sales=sa.data||[];S.sItems=si.data||[];
   S.purch=pu.data||[];S.pItems=pi.data||[];
   S.aliases=al.data||[];S.pAll=pall.data||[];S.recon=rm.data||[];S.pays=pa.data||[];S.prices=pr.data||[];S.exps=ex.data||[];S.drafts=dr.data||[];
+  S.cpo=cpo.data||[];
   S.invs=(iv.data||[]).map(inv=>{const pp=(pa.data||[]).filter(x=>x.invoice_id===inv.id);const pd=pp.reduce((t,x)=>t+Number(x.amount),0);let st=inv.status||'unpaid';if(pp.length)st=pd>=Number(inv.total)?'paid':'partial';return{...inv,_pays:pp,_paid:pd,status:st};});
   fillSels();
 }
@@ -1163,9 +1166,90 @@ function onDragEnd(){
   Object.assign(_drag,{el:null,startY:0,startX:0,dragging:false});
 }
 
+// ── CUSTOMER-SPECIFIC PRICES ──
+// A customer's own price for a product wins over the master sell price.
+function custPrice(cid,pid){
+  if(!cid||!pid)return null;
+  const o=S.cpo.find(x=>x.market_customer_id===cid&&x.product_id===pid);
+  return o?Number(o.sell_price):null;
+}
+// Master product (with prices) for a typed name — goes through aliases first
+function prodFor(nm){
+  nm=(nm||'').trim();if(!nm)return null;
+  const r=resolveP(nm);
+  return (r&&S.prices.find(x=>x.id===r.id))||S.prices.find(x=>x.name.toLowerCase()===nm.toLowerCase())||null;
+}
+function salePriceFor(cid,p){
+  if(!p)return 0;
+  const ov=custPrice(cid,p.id);
+  return ov!==null?ov:Number(p.sell_price||0);
+}
+async function upsertCustPrice(cid,pid,price){
+  if(!cid||!pid||!(price>0))return;
+  const ex=S.cpo.find(x=>x.market_customer_id===cid&&x.product_id===pid);
+  if(ex&&Number(ex.sell_price)===Number(price))return;
+  const{data,error}=await sb.from('customer_price_overrides').upsert({market_customer_id:cid,product_id:pid,sell_price:price,user_id:S.user?.id||null,updated_at:new Date().toISOString()},{onConflict:'market_customer_id,product_id'}).select().single();
+  if(error){console.warn('Customer price save failed:',error);return;}
+  if(ex)Object.assign(ex,data);else S.cpo.push(data);
+}
+// When the customer changes, re-price rows that still hold an auto-filled price
+function repriceRows(containerId,cid){
+  const c=$(containerId);if(!c)return;
+  c.querySelectorAll('.ie-row').forEach(r=>{
+    const nm=(r.querySelector('.name-inp').value||'').trim();if(!nm)return;
+    const pi=r.querySelector('.price-inp');
+    if(pi.dataset.manual==='1')return;
+    const p=prodFor(nm);if(!p)return;
+    const pr=salePriceFor(cid,p);
+    if(pr>0){pi.value=pr.toFixed(2);recalc(pi,containerId==='es-items-list'?'es':'s');}
+  });
+}
+function openCustPrices(){
+  openM(`<div class="m-hd"><div class="m-ti"><i class="fa-solid fa-user-tag" style="color:var(--br);margin-right:8px"></i>Customer Prices</div><button class="m-x" onclick="closeM()">×</button></div>
+  <div class="info-box"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>A customer price only applies to that one customer. Everyone else keeps the master sell price. Prices you type on a sale are saved here automatically.</div>
+  <div class="r2">
+    <div class="fld"><label class="lbl">Customer</label><select class="inp" id="cpo-cust" onchange="rCustPrices()"><option value="">All customers</option>${S.custs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
+    <div class="fld"><label class="lbl">Product</label><div class="ac-wrap"><input class="inp" id="cpo-prod" list="cpo-prod-list" placeholder="Type product..." autocomplete="off"><datalist id="cpo-prod-list">${S.prices.map(p=>`<option value="${esc(p.name)}">`).join('')}</datalist></div></div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:flex-end">
+    <div class="fld" style="flex:1;margin:0"><label class="lbl">Price for this customer (RM)</label><input class="inp" type="number" id="cpo-price" step="0.01" min="0" placeholder="0.00"></div>
+    <button class="btn btn-pr" onclick="saveCustPriceForm()"><i class="fa-solid fa-check"></i> Save</button>
+  </div>
+  <hr style="border:none;border-top:1px solid var(--bdr);margin:16px 0 10px">
+  <div id="cpo-list"></div>`);
+  rCustPrices();
+}
+function rCustPrices(){
+  const el=$('cpo-list');if(!el)return;
+  const f=$('cpo-cust')?.value||'';
+  const ls=S.cpo.filter(o=>!f||o.market_customer_id===f).map(o=>{
+    const p=S.prices.find(x=>x.id===o.product_id);
+    return{...o,cust:S.custs.find(c=>c.id===o.market_customer_id)?.name||'?',prod:p?.name||'(removed product)',unit:p?.unit||'',master:Number(p?.sell_price||0)};
+  }).sort((a,b)=>a.cust.localeCompare(b.cust)||a.prod.localeCompare(b.prod));
+  if(!ls.length){el.innerHTML='<div class="empty" style="padding:18px"><i class="fa-solid fa-user-tag"></i><p>No customer prices yet.</p></div>';return;}
+  el.innerHTML=`<div class="tw"><table class="tbl"><thead><tr><th>Customer</th><th>Item</th><th class="n">Their price</th><th class="n">Master</th><th></th></tr></thead><tbody>${ls.map(o=>`<tr><td>${esc(o.cust)}</td><td style="font-weight:600">${esc(o.prod)}${o.unit?` <span style="color:var(--t3);font-weight:400">/${esc(o.unit)}</span>`:''}</td><td class="n" style="font-weight:700;color:var(--br)">RM ${fmt(o.sell_price)}</td><td class="n" style="color:var(--t3)">${o.master>0?'RM '+fmt(o.master):'—'}</td><td><button class="btn btn-rd btn-sm btn-ic" onclick="delCustPrice('${o.id}')"><i class="fa-solid fa-trash"></i></button></td></tr>`).join('')}</tbody></table></div>`;
+}
+async function saveCustPriceForm(){
+  const cid=$('cpo-cust').value,nm=($('cpo-prod').value||'').trim(),price=parseFloat($('cpo-price').value);
+  if(!cid){toast('Pick a customer','err');return;}
+  const p=prodFor(nm);
+  if(!p){toast('Pick a product from the list','err');return;}
+  if(!(price>0)){toast('Enter a price','err');return;}
+  await upsertCustPrice(cid,p.id,price);
+  $('cpo-prod').value='';$('cpo-price').value='';rCustPrices();toast('Customer price saved','ok');
+}
+async function delCustPrice(id){
+  if(!confirm('Remove this customer price? They will go back to the master price.'))return;
+  const{error}=await sb.from('customer_price_overrides').delete().eq('id',id);
+  if(error){toast(error.message,'err');return;}
+  S.cpo=S.cpo.filter(x=>x.id!==id);rCustPrices();toast('Removed');
+}
+
 // ── REPEAT LAST ORDER (Sales) ──
 function onSaleCustomerChange(){
-  const cid=$('s-cust').value;const btn=$('repeat-order-btn');if(!btn)return;
+  const cid=$('s-cust').value;const btn=$('repeat-order-btn');
+  repriceRows('s-items',cid);
+  if(!btn)return;
   if(!cid){btn.style.display='none';return;}
   const cname=S.custs.find(c=>c.id===cid)?.name;
   const hasPrev=S.sales.some(s=>s.customer_name===cname&&getSI(s.id).length>0);
@@ -1178,7 +1262,7 @@ function repeatLastOrder(){
   if(!last){toast('No previous order with items found','err');return;}
   const si=getSI(last.id);
   $('s-items').innerHTML='';rc.s=0;
-  si.forEach(r=>{const row=addSaleRow();fillRow(row,r,'s');});
+  si.forEach(r=>{const row=addSaleRow();const ov=custPrice(cid,r.product_id||pidOf(r.name));fillRow(row,ov!==null?{...r,unit_price:ov,total:ov*Number(r.qty||0)}:r,'s');});
   toast('Filled from last order — edit as needed','ok');
 }
 
@@ -1284,10 +1368,13 @@ function onAC(inp,type){
   if(!hits.length){drop.style.display='none';return;}
   drop.innerHTML=hits.map(p=>{
     const isSaleType=(type==='sale'||type==='es');
-    const sell=p.sell_price>0?`RM ${fmt(p.sell_price)}`:'no price';
+    const cid=isSaleType?(type==='es'?$('es-cust'):$('s-cust'))?.value:'';
+    const ov=isSaleType?custPrice(cid,p.id):null;
+    const sp=ov!==null?ov:Number(p.sell_price||0);
+    const sell=sp>0?`RM ${fmt(sp)}${ov!==null?' ★':''}`:'no price';
     const cost=p.cost_price>0?`RM ${fmt(p.cost_price)}`:'no price';
     const uomStr=p.unit?`${esc(p.unit)} · `:'';
-    return`<div class="ac-item" onmousedown="selAC(event,this,'${type}')" ontouchstart="selAC(event,this,'${type}')" data-nm="${esc(p.name)}" data-uom="${esc(p.unit||'')}" data-sell="${p.sell_price||0}" data-cost="${p.cost_price||0}" data-sup="${esc(p.default_supplier||'')}"><span>${esc(p.name)}</span><span>${uomStr}${isSaleType?sell:cost}</span></div>`;
+    return`<div class="ac-item" onmousedown="selAC(event,this,'${type}')" ontouchstart="selAC(event,this,'${type}')" data-pid="${p.id}" data-nm="${esc(p.name)}" data-uom="${esc(p.unit||'')}" data-sell="${p.sell_price||0}" data-cost="${p.cost_price||0}" data-sup="${esc(p.default_supplier||'')}"><span>${esc(p.name)}</span><span>${uomStr}${isSaleType?sell:cost}</span></div>`;
   }).join('');
   drop.style.display='block';
   placeAC(inp,drop);
@@ -1318,13 +1405,15 @@ function selAC(e,item,type){
   if(!row)return;
   row.querySelector('.name-inp').value=item.dataset.nm;
   if(item.dataset.uom)row.querySelector('.uom-inp').value=item.dataset.uom;
-  const isSale=(type==='sale'||type==='es');const price=isSale?parseFloat(item.dataset.sell||0):parseFloat(item.dataset.cost||0);
-  if(price>0)row.querySelector('.price-inp').value=price.toFixed(2);
+  const isSale=(type==='sale'||type==='es');let price=isSale?parseFloat(item.dataset.sell||0):parseFloat(item.dataset.cost||0);
+  if(isSale){const ov=custPrice((type==='es'?$('es-cust'):$('s-cust'))?.value,item.dataset.pid);if(ov!==null)price=ov;}
+  const _pi=row.querySelector('.price-inp');delete _pi.dataset.manual;
+  if(price>0)_pi.value=price.toFixed(2);
   if(type==='purch'&&item.dataset.sup&&!$('p-sup')?.value)setPurchSupplier('p-sup',item.dataset.sup);
   item.parentElement.style.display='none';
   // Trigger focus on next field for better UX
   const priceInp=row.querySelector('.price-inp');
-  recalc(priceInp,type==='sale'?'s':'p');
+  recalc(priceInp,{sale:'s',es:'es',purch:'p',ep:'ep'}[type]||'s');
   setTimeout(()=>priceInp.focus(),50);
 }
 function learnUOM(inp,type){
@@ -1334,8 +1423,19 @@ function learnUOM(inp,type){
 }
 function learnPrice(inp,type){
   const row=inp.closest('.ie-row,.ie-p-row');const nm=(row.querySelector('.name-inp').value||'').trim();const price=parseFloat(inp.value)||0;
-  const p=S.prices.find(x=>x.name.toLowerCase()===nm.toLowerCase());
-  if(p&&price>0){const isSale=(type==='sale'||type==='es');const upd=isSale?{sell_price:price}:{cost_price:price};sb.from('prices').update({...upd,updated_at:new Date().toISOString()}).eq('id',p.id).then();}
+  const p=prodFor(nm);
+  if(!p||!(price>0))return;
+  const isSale=(type==='sale'||type==='es');
+  if(isSale){
+    // Remember as THIS customer's price only — never touches other customers
+    inp.dataset.manual='1';
+    const cid=(type==='es'?$('es-cust'):$('s-cust'))?.value;
+    if(cid&&!cid.startsWith('keep:'))upsertCustPrice(cid,p.id,price);
+    // First-ever price for a product with no master price yet becomes the master
+    else if(!(Number(p.sell_price)>0))sb.from('prices').update({sell_price:price,updated_at:new Date().toISOString()}).eq('id',p.id).then();
+  }else{
+    sb.from('prices').update({cost_price:price,updated_at:new Date().toISOString()}).eq('id',p.id).then();
+  }
 }
 function getSaleRows(){const c=$('s-items');return[...c.querySelectorAll('.ie-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty!==0);}
 function setPurchSupplier(selId,name){
@@ -1351,6 +1451,8 @@ function fillRow(row,data,t){
   row.querySelector('.uom-inp').value=data.uom||'';
   row.querySelector('.qty-inp').value=data.qty||'';
   row.querySelector('.price-inp').value=data.unit_price>0?data.unit_price:'';
+  // Prices already charged on a saved sale must not be re-priced by a customer switch
+  if(t==='es'&&data.unit_price>0)row.querySelector('.price-inp').dataset.manual='1';
   if((t==='p'||t==='ep')&&data.supplier)setPurchSupplier(t==='ep'?'ep-sup':'p-sup',data.supplier);
   recalc(row.querySelector('.price-inp'),t);
 }
@@ -1387,7 +1489,7 @@ async function doSaveSale(){
       }
     }
     if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,product_id:pidOf(r.name),sort_order:i})));
-    rows.forEach(r=>{const p=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(p&&r.unit_price>0)sb.from('prices').update({sell_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',p.id).then();});
+    for(const r of rows){const p=prodFor(r.name);if(!p||!(r.unit_price>0))continue;if(cid)await upsertCustPrice(cid,p.id,r.unit_price);else if(!(Number(p.sell_price)>0))sb.from('prices').update({sell_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',p.id).then();}
     toast('Sale recorded!','ok');
     logAct('create',`Sale: ${d.customer_name} — RM ${fmt(total)} (${d.entry_date})`);
     $('s-items').innerHTML='';rc.s=0;$('s-notes').value='';$('s-tot').textContent='RM 0.00';$('s-manual-tot').value='';
@@ -1490,7 +1592,7 @@ async function saveEditedSale(){
     await sb.from('sale_items').delete().eq('sale_id',_eS);
     if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name),sort_order:i})));
     // Update prices learn
-    rows.forEach(r=>{const p=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(p&&r.unit_price>0)sb.from('prices').update({sell_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',p.id).then();});
+    for(const r of rows){const p=prodFor(r.name);if(!p||!(r.unit_price>0))continue;if(cid)await upsertCustPrice(cid,p.id,r.unit_price);else if(!(Number(p.sell_price)>0))sb.from('prices').update({sell_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',p.id).then();}
     // Sync invoice if one exists for this sale (match by client + date)
     const client=S.clients.find(c=>c.name===cn);
     if(client){
@@ -2065,7 +2167,7 @@ function reconToSale(name,uom,qty){
   const addTab=document.querySelector('#page-sales .tab'); if(addTab)stab('add',addTab);
   const d=$('rc-date')?.value; if(d&&$('s-date'))$('s-date').value=d;
   const row=addSaleRow();
-  fillRow(row,{name:name,uom:uom,qty:qty,unit_price:(resolveP(name)||{}).sell_price||0,total:0},'s');
+  fillRow(row,{name:name,uom:uom,qty:qty,unit_price:salePriceFor($('s-cust')?.value,prodFor(name)),total:0},'s');
   recalcTot('s');
   toast('Added to the sale form — pick the customer and check the price','ok');
 }
