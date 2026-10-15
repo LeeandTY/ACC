@@ -149,7 +149,7 @@ textarea.inp{resize:vertical;min-height:60px}
 .rtot{background:var(--surf)!important;font-weight:700;text-align:right}
 .entry-total{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surf);border-radius:var(--rs);margin:10px 0 6px;font-weight:700;font-size:15px}
 .ac-wrap{position:relative}
-.ac-drop{display:none;position:absolute;left:0;right:0;top:calc(100% + 2px);background:var(--card);border:1.5px solid var(--br);border-radius:var(--rs);box-shadow:var(--sh2);z-index:50;max-height:180px;overflow-y:auto}
+.ac-drop{display:none;position:fixed;left:0;top:0;min-width:200px;background:var(--card);border:1.5px solid var(--br);border-radius:var(--rs);box-shadow:var(--sh2);z-index:400;max-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .ac-item{padding:8px 12px;font-size:13px;cursor:pointer;color:var(--t1);border-bottom:1px solid var(--bdr)}
 .ac-item:last-child{border-bottom:none}
 .ac-item:hover,.ac-item:active{background:var(--brl);color:var(--br)}
@@ -1288,7 +1288,36 @@ function onAC(inp,type){
     return`<div class="ac-item" onmousedown="selAC(event,this,'${type}')" ontouchstart="selAC(event,this,'${type}')" data-nm="${esc(p.name)}" data-uom="${esc(p.unit||'')}" data-sell="${p.sell_price||0}" data-cost="${p.cost_price||0}" data-sup="${esc(p.default_supplier||'')}"><span style="font-weight:600">${esc(p.name)}</span><span style="color:var(--t3);font-size:11px;margin-left:6px">${uomStr}${isSaleType?sell:cost}</span></div>`;
   }).join('');
   drop.style.display='block';
+  positionAC(inp,drop);
 }
+// The list is position:fixed so the scrolling item table can't clip it — place it under the
+// input (or above it when there's no room below), kept inside the screen.
+function positionAC(inp,drop){
+  const r=inp.getBoundingClientRect();
+  const vw=window.innerWidth,vh=window.innerHeight;
+  const w=Math.min(Math.max(r.width,240),vw-16);
+  let left=Math.min(Math.max(8,r.left),vw-w-8);
+  const below=vh-r.bottom-8,above=r.top-8;
+  const up=below<170&&above>below;
+  const maxH=Math.max(100,Math.min(300,up?above:below));
+  drop.style.width=w+'px';
+  drop.style.left=left+'px';
+  drop.style.maxHeight=maxH+'px';
+  if(up){drop.style.top='auto';drop.style.bottom=(vh-r.top+2)+'px';}
+  else{drop.style.bottom='auto';drop.style.top=(r.bottom+2)+'px';}
+}
+// Keep an open list glued to its input when the page, the item table or the phone keyboard moves things
+function repositionAC(e){
+  if(e&&e.target&&e.target.classList&&e.target.classList.contains('ac-drop'))return; // scrolling the list itself
+  document.querySelectorAll('.ac-drop').forEach(d=>{
+    if(d.style.display!=='block')return;
+    const inp=d.previousElementSibling;
+    if(inp)positionAC(inp,d);
+  });
+}
+window.addEventListener('scroll',repositionAC,true);
+window.addEventListener('resize',()=>repositionAC());
+if(window.visualViewport)window.visualViewport.addEventListener('resize',()=>repositionAC());
 function hideAC(inp){setTimeout(()=>{const d=inp.nextElementSibling;if(d)d.style.display='none';},350);}
 function selAC(e,item,type){
   e.preventDefault(); // prevents blur on both touch and mouse, keeping dropdown open until we're done
