@@ -235,7 +235,7 @@ textarea.inp{resize:vertical;min-height:60px}
 </div>
 
 <div id="topbar">
-  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.4 · Pasar Pudu</small></div>
+  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.5 · Pasar Pudu</small></div>
   <div class="tb-ri">
     <button class="tbn" id="th-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbn" onclick="doSync()"><i class="fa-solid fa-arrows-rotate" id="sync-ic"></i></button>
@@ -624,7 +624,7 @@ const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 const ECATS=['Rent','Transport','Packaging','Utilities','Marketing','Salary','Other'];
 let sb,_chart,_repChart;
 const S={
-  user:null,custs:[],sups:[],clients:[],prices:[],aliases:[],pAll:[],recon:[],
+  user:null,custs:[],sups:[],clients:[],prices:[],aliases:[],pAll:[],recon:[],ovr:[],
   sales:[],sItems:[],purch:[],pItems:[],invs:[],pays:[],exps:[],drafts:[],
   eS:null,eP:null,eI:null,ePr:null,dFrom:'',dTo:'',
   cfg:{company:'Lee & TY Trading',address:'Pasar Pudu, Kuala Lumpur',phone:'',regNo:'',sstOn:false,sstRate:6,creditDays:30,terms:'',expCats:[...ECATS],itemCats:['Vegetables','Meat','Seafood','Fruits','Beverages','Frozen Food','Noodles','Dry Goods','Others']},
@@ -835,6 +835,46 @@ function suggestMaster(name){
   });
   return best;
 }
+// ── UNITS & COST AT SALE (v6.5) ──
+// Same unit written differently: bag/pack = pkt, ikt = ikat. Anything else that differs is a genuinely different unit.
+const UOM_SYN={bag:'pkt',pack:'pkt',ikt:'ikat'};
+const normUom=u=>{const t=String(u??'').toLowerCase().trim();return UOM_SYN[t]||t;};
+// Cost per unit to freeze on a sale line. null = unknown (no cost on the product, or sold in a different unit to the master)
+function costAtSale(name,uom){
+  const pid=pidOf(name); if(!pid)return null;
+  const p=S.prices.find(x=>x.id===pid);
+  if(!p||!(Number(p.cost_price)>0))return null;
+  const su=normUom(uom),mu=normUom(p.unit);
+  if(su&&mu&&su!==mu)return null;
+  return Number(p.cost_price);
+}
+function marginReportData(from,to){
+  const sById={};S.sales.filter(s=>s.entry_date>=from&&s.entry_date<=to).forEach(s=>{sById[s.id]=s;});
+  const item={},cust={};let skipN=0,skipAmt=0;
+  S.sItems.forEach(i=>{
+    const s=sById[i.sale_id]; if(!s)return;
+    const total=Number(i.total||0); if(total===0)return;      // price still TBC / free line
+    if(i.cost_at_sale==null){skipN++;skipAmt+=total;return;}  // unit differs or no cost — never guess
+    const profit=total-Number(i.cost_at_sale)*Number(i.qty||0);
+    const nm=mName(i), cn=s.customer_name||'?';
+    (item[nm]=item[nm]||{sales:0,profit:0}); item[nm].sales+=total; item[nm].profit+=profit;
+    (cust[cn]=cust[cn]||{sales:0,profit:0}); cust[cn].sales+=total; cust[cn].profit+=profit;
+  });
+  return{item,cust,skipN,skipAmt};
+}
+function marginCardsHtml(from,to){
+  const d=marginReportData(from,to);
+  const rows=(obj,lim)=>{const e=Object.entries(obj).sort((a,b)=>b[1].profit-a[1].profit);
+    return (lim?e.slice(0,lim):e).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="n">RM ${fmt(v.sales)}</td><td class="n" style="color:${v.profit>=0?'var(--grn)':'var(--red)'};font-weight:600">${v.profit<0?'−':''}RM ${fmt(Math.abs(v.profit))}</td><td class="n" style="color:var(--t3)">${v.sales?((v.profit/v.sales*100).toFixed(1))+'%':'—'}</td></tr>`).join('')
+      ||'<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--t3)">No data</td></tr>';};
+  const head=lbl=>`<thead><tr><th>${lbl}</th><th class="n">Sales</th><th class="n">Profit</th><th class="n">Margin</th></tr></thead>`;
+  const note=d.skipN?`<div class="info-box" style="border-radius:0;margin:0"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>${d.skipN} sale line${d.skipN>1?'s':''} (RM ${fmt(d.skipAmt)}) not counted — sold in a different unit from the product's cost unit, or no cost recorded yet.</div>`:'';
+  return `<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-chart-column" style="color:var(--grn)"></i>Profit by Item</span></div>${note}
+  <div class="tw"><table class="tbl">${head('Item (top 15)')}<tbody>${rows(d.item,15)}</tbody></table></div></div>
+  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-user-tag" style="color:var(--grn)"></i>Profit by Customer</span></div>
+  <div class="tw"><table class="tbl">${head('Customer')}<tbody>${rows(d.cust,0)}</tbody></table></div></div>`;
+}
+
 // Master (customer-facing) name for a saved line item. Original text is never overwritten.
 function mName(it,field){
   if(it&&it.product_id){const p=S.pAll.find(x=>x.id===it.product_id); if(p)return p.name;}
@@ -948,7 +988,7 @@ function saveCfg(){localStorage.setItem('lty_cfg',JSON.stringify(S.cfg));toast('
 
 async function loadAll(){
   const uid=S.user.id;
-  const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr,al,pall,rm]=await Promise.all([
+  const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr,al,pall,rm,ov]=await Promise.all([
     sb.from('market_customers').select('*').order('name'),
     sb.from('suppliers').select('*').order('name'),
     sb.from('clients').select('*').order('name'),
@@ -964,11 +1004,12 @@ async function loadAll(){
     sb.from('product_aliases').select('*'),
     sb.from('prices').select('id,name,unit,category,code,active'),
     sb.from('recon_marks').select('*'),
+    sb.from('customer_price_overrides').select('*'),
   ]);
   S.custs=cu.data||[];S.sups=su.data||[];S.clients=cl.data||[];
   S.sales=sa.data||[];S.sItems=si.data||[];
   S.purch=pu.data||[];S.pItems=pi.data||[];
-  S.aliases=al.data||[];S.pAll=pall.data||[];S.recon=rm.data||[];S.pays=pa.data||[];S.prices=pr.data||[];S.exps=ex.data||[];S.drafts=dr.data||[];
+  S.aliases=al.data||[];S.pAll=pall.data||[];S.recon=rm.data||[];S.ovr=ov.data||[];S.pays=pa.data||[];S.prices=pr.data||[];S.exps=ex.data||[];S.drafts=dr.data||[];
   S.invs=(iv.data||[]).map(inv=>{const pp=(pa.data||[]).filter(x=>x.invoice_id===inv.id);const pd=pp.reduce((t,x)=>t+Number(x.amount),0);let st=inv.status||'unpaid';if(pp.length)st=pd>=Number(inv.total)?'paid':'partial';return{...inv,_pays:pp,_paid:pd,status:st};});
   fillSels();
 }
@@ -1285,7 +1326,7 @@ function onAC(inp,type){
     const sell=p.sell_price>0?`RM ${fmt(p.sell_price)}`:'no price';
     const cost=p.cost_price>0?`RM ${fmt(p.cost_price)}`:'no price';
     const uomStr=p.unit?`${esc(p.unit)} · `:'';
-    return`<div class="ac-item" onmousedown="selAC(event,this,'${type}')" ontouchstart="selAC(event,this,'${type}')" data-nm="${esc(p.name)}" data-uom="${esc(p.unit||'')}" data-sell="${p.sell_price||0}" data-cost="${p.cost_price||0}" data-sup="${esc(p.default_supplier||'')}"><span style="font-weight:600">${esc(p.name)}</span><span style="color:var(--t3);font-size:11px;margin-left:6px">${uomStr}${isSaleType?sell:cost}</span></div>`;
+    return`<div class="ac-item" onmousedown="selAC(event,this,'${type}')" ontouchstart="selAC(event,this,'${type}')" data-pid="${p.id}" data-nm="${esc(p.name)}" data-uom="${esc(p.unit||'')}" data-sell="${p.sell_price||0}" data-cost="${p.cost_price||0}" data-sup="${esc(p.default_supplier||'')}"><span style="font-weight:600">${esc(p.name)}</span><span style="color:var(--t3);font-size:11px;margin-left:6px">${uomStr}${isSaleType?sell:cost}</span></div>`;
   }).join('');
   drop.style.display='block';
   positionAC(inp,drop);
@@ -1325,7 +1366,8 @@ function selAC(e,item,type){
   if(!row)return;
   row.querySelector('.name-inp').value=item.dataset.nm;
   if(item.dataset.uom)row.querySelector('.uom-inp').value=item.dataset.uom;
-  const isSale=(type==='sale'||type==='es');const price=isSale?parseFloat(item.dataset.sell||0):parseFloat(item.dataset.cost||0);
+  const isSale=(type==='sale'||type==='es');let price=isSale?parseFloat(item.dataset.sell||0):parseFloat(item.dataset.cost||0);
+  if(isSale){const cv=(type==='es'?$('es-cust'):$('s-cust'))?.value||'';const ov=(S.ovr||[]).find(o=>o.market_customer_id===cv&&o.product_id===item.dataset.pid);if(ov&&Number(ov.sell_price)>0)price=Number(ov.sell_price);}
   if(price>0)row.querySelector('.price-inp').value=price.toFixed(2);
   if(type==='purch'&&item.dataset.sup&&!$('p-sup')?.value)setPurchSupplier('p-sup',item.dataset.sup);
   item.parentElement.style.display='none';
@@ -1334,16 +1376,11 @@ function selAC(e,item,type){
   recalc(priceInp,type==='sale'?'s':'p');
   setTimeout(()=>priceInp.focus(),50);
 }
-function learnUOM(inp,type){
-  const row=inp.closest('.ie-row,.ie-p-row');const nm=(row.querySelector('.name-inp').value||'').trim();
-  const p=S.prices.find(x=>x.name.toLowerCase()===nm.toLowerCase());
-  if(p&&inp.value)sb.from('prices').update({unit:inp.value,updated_at:new Date().toISOString()}).eq('id',p.id).then();
-}
-function learnPrice(inp,type){
-  const row=inp.closest('.ie-row,.ie-p-row');const nm=(row.querySelector('.name-inp').value||'').trim();const price=parseFloat(inp.value)||0;
-  const p=S.prices.find(x=>x.name.toLowerCase()===nm.toLowerCase());
-  if(p&&price>0){const isSale=(type==='sale'||type==='es');const upd=isSale?{sell_price:price}:{cost_price:price};sb.from('prices').update({...upd,updated_at:new Date().toISOString()}).eq('id',p.id).then();}
-}
+// v6.5: the unit typed on a line belongs to that line only — customers order the same product in different units,
+// so the master unit is changed from the Prices page, never from a sale/purchase line.
+function learnUOM(inp,type){}
+// v6.5: a price typed on a line (special customer price, temporary supplier increase) never overwrites the master price.
+function learnPrice(inp,type){}
 function getSaleRows(){const c=$('s-items');return[...c.querySelectorAll('.ie-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty!==0);}
 function setPurchSupplier(selId,name){
   const sel=$(selId); if(!sel||!name)return;
@@ -1393,8 +1430,8 @@ async function doSaveSale(){
         }catch(e){console.warn('Invoice auto-create failed:',e);toast('Sale saved but invoice failed: '+e.message,'err');}
       }
     }
-    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,product_id:pidOf(r.name),sort_order:i})));
-    rows.forEach(r=>{const p=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(p&&r.unit_price>0)sb.from('prices').update({sell_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',p.id).then();});
+    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,product_id:pidOf(r.name),cost_at_sale:costAtSale(r.name,r.uom),sort_order:i})));
+    /* v6.5: master sell price is no longer overwritten by the price on a saved sale */
     toast('Sale recorded!','ok');
     logAct('create',`Sale: ${d.customer_name} — RM ${fmt(total)} (${d.entry_date})`);
     $('s-items').innerHTML='';rc.s=0;$('s-notes').value='';$('s-tot').textContent='RM 0.00';$('s-manual-tot').value='';
@@ -1494,10 +1531,12 @@ async function saveEditedSale(){
   try{
     // Update sale record and items
     await sb.from('daily_sales').update({entry_date:saleDate,customer_name:cn,market_customer_id:cid||null,amount:total,notes:$('es-notes').value||desc}).eq('id',_eS);
+    // keep the cost already recorded on each line — editing an old sale must not re-price its cost
+    const oldCost={};getSI(_eS).forEach(x=>{if(x.cost_at_sale!=null&&x.product_id)oldCost[x.product_id+'|'+normUom(x.uom)]=Number(x.cost_at_sale);});
     await sb.from('sale_items').delete().eq('sale_id',_eS);
-    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name),sort_order:i})));
+    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name),cost_at_sale:(oldCost[pidOf(r.name)+'|'+normUom(r.uom)]??costAtSale(r.name,r.uom)),sort_order:i})));
     // Update prices learn
-    rows.forEach(r=>{const p=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(p&&r.unit_price>0)sb.from('prices').update({sell_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',p.id).then();});
+    /* v6.5: master sell price is no longer overwritten by the price on a saved sale */
     // Sync invoice if one exists for this sale (match by client + date)
     const client=S.clients.find(c=>c.name===cn);
     if(client){
@@ -1623,7 +1662,7 @@ async function doSavePurch(){
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('p-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('p-ref').value||''}).select().single();
       if(error)throw error;
       await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name),sort_order:i})));
-      srows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(pr){if(r.unit_price>0)sb.from('prices').update({cost_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',pr.id).then();}else if(r.name){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
+      srows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(!pr&&r.name&&!resolveP(r.name)){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
     }
     toast('Purchase recorded!','ok');
     logAct('create',`Purchase: ${sup} — RM ${fmt(rows.reduce((s,r)=>s+r.total,0))} (${$('p-date').value||today()})`);
@@ -1667,7 +1706,7 @@ async function saveEditedPurch(){
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('ep-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('ep-notes').value||''}).select().single();
       if(error)throw error;
       await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name),sort_order:i})));
-      srows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(pr&&r.unit_price>0)sb.from('prices').update({cost_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',pr.id).then();});
+      /* v6.5: master cost is no longer overwritten by the price on a saved purchase */
     }
     logAct('edit',`Purchase edited: ${rows.map(r=>r.supplier).filter((v,i,a)=>a.indexOf(v)===i).join(', ')}`);
     toast('Purchase updated!','ok');closeEditPurch();await loadAll();rPH();
@@ -2113,6 +2152,7 @@ function rRep(){
     <tr class="pr-row"><td style="font-weight:700;color:var(--t1)">Net Profit / Loss</td><td class="n ${net>=0?'pos':'neg'}">RM ${fmt(net)}</td></tr>
     <tr><td style="color:var(--t3)">Profit Margin</td><td class="n" style="color:var(--t3)">${ts>0?((net/ts*100).toFixed(1))+'%':'—'}</td></tr>
   </tbody></table></div>
+  ${marginCardsHtml(rFrom,rTo)}
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-chart-line" style="color:var(--br)"></i>Sales vs Purchases vs Expenses</span>
   <select id="rep-ct" onchange="updateRepChart()" class="inp sm" style="max-width:100px"><option value="bar">Bar</option><option value="line">Line</option></select>
   </div><div style="padding:14px"><canvas id="rep-chart" height="130"></canvas></div></div>
@@ -2247,7 +2287,7 @@ function expBkp(){
   const b={
     version:'v6',
     exportedAt:new Date().toISOString(),
-    appVersion:'v6.4',
+    appVersion:'v6.5',
     sales:S.sales,
     saleItems:S.sItems,
     purchases:S.purch,
@@ -2828,7 +2868,7 @@ async function saveAllBatch(){
       const{data:p,error:pErr}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:entryDate,supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:'Batch scanned'}).select().single();
       if(pErr)throw pErr;
       await sb.from('purchase_items').insert(rows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,product_id:pidOf(r.name),sort_order:i})));
-      rows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(pr){if(r.unit_price>0)sb.from('prices').update({cost_price:r.unit_price,updated_at:new Date().toISOString()}).eq('id',pr.id).then();}else if(r.name){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
+      rows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(!pr&&r.name&&!resolveP(r.name)){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
       logAct('create',`Purchase (batch scan): ${sup} — RM ${fmt(total)} (${entryDate})`);
       saved++;
     }catch(e){failed++;}
