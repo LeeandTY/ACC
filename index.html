@@ -235,7 +235,7 @@ textarea.inp{resize:vertical;min-height:60px}
 </div>
 
 <div id="topbar">
-  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.9 · Pasar Pudu</small></div>
+  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v7.0 · Pasar Pudu</small></div>
   <div class="tb-ri">
     <button class="tbn" id="th-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbn" onclick="doSync()"><i class="fa-solid fa-arrows-rotate" id="sync-ic"></i></button>
@@ -1439,7 +1439,7 @@ async function doSaveSale(){
           const{data:num}=await sb.rpc('next_invoice_number');
           const due=S.cfg.creditDays>0?new Date(Date.now()+S.cfg.creditDays*86400000).toISOString().slice(0,10):'';
           const tax=S.cfg.sstOn?S.cfg.sstRate:0;const taxAmt=total*(tax/100);const invTotal=total+taxAmt;
-          const{data:inv,error:invErr}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cliId,invoice_number:num,status:'sent',issue_date:d.entry_date,due_date:due||null,tax_rate:tax,subtotal:total,tax_amount:taxAmt,total:invTotal,notes:S.cfg.terms||''}).select().single();
+          const{data:inv,error:invErr}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cliId,invoice_number:num,status:'sent',issue_date:d.entry_date,due_date:due||null,tax_rate:tax,subtotal:total,tax_amount:taxAmt,total:invTotal,notes:S.cfg.terms||'',sale_id:saleId}).select().single();
           if(invErr)throw invErr;
           if(inv&&rows.length)await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name,r.uom)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name,r.uom),sort_order:i})));
         }catch(e){console.warn('Invoice auto-create failed:',e);toast('Sale saved but invoice failed: '+e.message,'err');}
@@ -1568,12 +1568,12 @@ async function saveEditedSale(){
     // Sync invoice if one exists for this sale (match by client + date)
     const client=S.clients.find(c=>c.name===cn);
     if(client){
-      const inv=S.invs.find(i=>i.client_id===client.id&&i.issue_date===saleDate);
+      const inv=S.invs.find(i=>i.sale_id===_eS)||S.invs.find(i=>!i.sale_id&&i.client_id===client.id&&i.issue_date===saleDate);
       if(inv){
         const tax=Number(inv.tax_rate||0);
         const taxAmt=total*(tax/100);
         const invTotal=total+taxAmt;
-        await sb.from('invoices').update({subtotal:total,tax_amount:taxAmt,total:invTotal}).eq('id',inv.id);
+        await sb.from('invoices').update({subtotal:total,tax_amount:taxAmt,total:invTotal,issue_date:saleDate,sale_id:_eS}).eq('id',inv.id);
         await sb.from('invoice_items').delete().eq('invoice_id',inv.id);
         await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name,r.uom)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name,r.uom),sort_order:i})));
         toast('Sale + invoice updated!','ok');
@@ -1588,7 +1588,9 @@ function getESRows(){
   return[...$('es-items-list').querySelectorAll('.ie-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty!==0);
 }
 async function delSale(id){
-  if(!confirm('Delete this sale?'))return;
+  const _li=(S.invs||[]).filter(i=>i.sale_id===id);
+  if(!confirm('Delete this sale'+(_li.length?' AND its invoice '+_li.map(i=>i.invoice_number).join(', '):'')+'?'))return;
+  if(_li.length){const ids=_li.map(i=>i.id);await sb.from('invoice_payments').delete().in('invoice_id',ids);await sb.from('invoice_items').delete().in('invoice_id',ids);await sb.from('invoices').delete().in('id',ids);}
   await sb.from('sale_items').delete().eq('sale_id',id);
   await sb.from('daily_sales').delete().eq('id',id);
   toast('Deleted');await loadAll();rSH();
@@ -1662,7 +1664,7 @@ async function mergeSales(date,cust){
           await sb.from('invoices').delete().in('id',dInv.map(i=>i.id));
         }
         const tax=Number(kInv.tax_rate||0), ta=newTotal*(tax/100);
-        await sb.from('invoices').update({subtotal:newTotal,tax_amount:ta,total:newTotal+ta}).eq('id',kInv.id);
+        await sb.from('invoices').update({subtotal:newTotal,tax_amount:ta,total:newTotal+ta,sale_id:keep.id}).eq('id',kInv.id);
       }
     }
     // remove the now-empty duplicate sales
@@ -2315,7 +2317,7 @@ function expBkp(){
   const b={
     version:'v6',
     exportedAt:new Date().toISOString(),
-    appVersion:'v6.9',
+    appVersion:'v7.0',
     sales:S.sales,
     saleItems:S.sItems,
     purchases:S.purch,
