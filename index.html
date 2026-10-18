@@ -235,7 +235,7 @@ textarea.inp{resize:vertical;min-height:60px}
 </div>
 
 <div id="topbar">
-  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.5 · Pasar Pudu</small></div>
+  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.6 · Pasar Pudu</small></div>
   <div class="tb-ri">
     <button class="tbn" id="th-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbn" onclick="doSync()"><i class="fa-solid fa-arrows-rotate" id="sync-ic"></i></button>
@@ -802,13 +802,27 @@ async function promptMerge(keepId){
 // ── MASTER PRODUCT NAME RESOLUTION ──
 const normNm=s=>String(s??'').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g,' ').trim();
 const stripUom=s=>String(s??'').replace(/\s*\([^)]*\)\s*$/,'');
-function resolveP(name){
-  const n=normNm(stripUom(name)); if(!n)return null;
-  const a=S.aliases.find(x=>x.alias_norm===n);
-  if(a){const p=S.pAll.find(x=>x.id===a.product_id); if(p)return p;}
-  return S.pAll.find(p=>normNm(p.name)===n)||null;
+function resolveP(name,uom){
+  const full=normNm(name); if(!full)return null;
+  let p=null;
+  // 1) exact wording first, so "Apple (pcs)" is not collapsed into "Apple"
+  let a=S.aliases.find(x=>x.alias_norm===full);
+  if(a)p=S.pAll.find(x=>x.id===a.product_id)||null;
+  if(!p)p=S.pAll.find(x=>normNm(x.name)===full)||null;
+  // 2) then ignore a trailing (unit) bracket
+  if(!p){const n=normNm(stripUom(name)); if(n){a=S.aliases.find(x=>x.alias_norm===n); if(a)p=S.pAll.find(x=>x.id===a.product_id)||null; if(!p)p=S.pAll.find(x=>normNm(x.name)===n)||null;}}
+  // 3) box/pcs twins (e.g. Apple (box) / Apple (pcs)): pick the one whose unit matches the line unit
+  if(p&&uom){
+    const base=x=>normNm(String(x.name).replace(/\s*\((box|pcs|ctn|nos)\)\s*$/i,''));
+    const b=base(p), u=normUom(uom);
+    if(normUom(p.unit)!==u){
+      const tw=S.pAll.find(x=>x.id!==p.id&&x.active!==false&&base(x)===b&&normUom(x.unit)===u);
+      if(tw)p=tw;
+    }
+  }
+  return p;
 }
-const pidOf=name=>{const p=resolveP(name);return p?p.id:null;};
+const pidOf=(name,uom)=>{const p=resolveP(name,uom);return p?p.id:null;};
 // Looser key for supplier/scanner wording: drop brackets, slashed alternatives, pack sizes
 function looseNm(s){
   let t=String(s??'');
@@ -837,11 +851,11 @@ function suggestMaster(name){
 }
 // ── UNITS & COST AT SALE (v6.5) ──
 // Same unit written differently: bag/pack = pkt, ikt = ikat. Anything else that differs is a genuinely different unit.
-const UOM_SYN={bag:'pkt',pack:'pkt',ikt:'ikat'};
+const UOM_SYN={bag:'pkt',pack:'pkt',ikt:'ikat',nos:'pcs',no:'pcs',pc:'pcs'};
 const normUom=u=>{const t=String(u??'').toLowerCase().trim();return UOM_SYN[t]||t;};
 // Cost per unit to freeze on a sale line. null = unknown (no cost on the product, or sold in a different unit to the master)
 function costAtSale(name,uom){
-  const pid=pidOf(name); if(!pid)return null;
+  const pid=pidOf(name,uom); if(!pid)return null;
   const p=S.prices.find(x=>x.id===pid);
   if(!p||!(Number(p.cost_price)>0))return null;
   const su=normUom(uom),mu=normUom(p.unit);
@@ -1426,11 +1440,11 @@ async function doSaveSale(){
           const tax=S.cfg.sstOn?S.cfg.sstRate:0;const taxAmt=total*(tax/100);const invTotal=total+taxAmt;
           const{data:inv,error:invErr}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cliId,invoice_number:num,status:'sent',issue_date:d.entry_date,due_date:due||null,tax_rate:tax,subtotal:total,tax_amount:taxAmt,total:invTotal,notes:S.cfg.terms||''}).select().single();
           if(invErr)throw invErr;
-          if(inv&&rows.length)await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name),sort_order:i})));
+          if(inv&&rows.length)await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name,r.uom)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name,r.uom),sort_order:i})));
         }catch(e){console.warn('Invoice auto-create failed:',e);toast('Sale saved but invoice failed: '+e.message,'err');}
       }
     }
-    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,product_id:pidOf(r.name),cost_at_sale:costAtSale(r.name,r.uom),sort_order:i})));
+    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,product_id:pidOf(r.name,r.uom),cost_at_sale:costAtSale(r.name,r.uom),sort_order:i})));
     /* v6.5: master sell price is no longer overwritten by the price on a saved sale */
     toast('Sale recorded!','ok');
     logAct('create',`Sale: ${d.customer_name} — RM ${fmt(total)} (${d.entry_date})`);
@@ -1534,7 +1548,7 @@ async function saveEditedSale(){
     // keep the cost already recorded on each line — editing an old sale must not re-price its cost
     const oldCost={};getSI(_eS).forEach(x=>{if(x.cost_at_sale!=null&&x.product_id)oldCost[x.product_id+'|'+normUom(x.uom)]=Number(x.cost_at_sale);});
     await sb.from('sale_items').delete().eq('sale_id',_eS);
-    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name),cost_at_sale:(oldCost[pidOf(r.name)+'|'+normUom(r.uom)]??costAtSale(r.name,r.uom)),sort_order:i})));
+    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name,r.uom),cost_at_sale:(oldCost[pidOf(r.name,r.uom)+'|'+normUom(r.uom)]??costAtSale(r.name,r.uom)),sort_order:i})));
     // Update prices learn
     /* v6.5: master sell price is no longer overwritten by the price on a saved sale */
     // Sync invoice if one exists for this sale (match by client + date)
@@ -1547,7 +1561,7 @@ async function saveEditedSale(){
         const invTotal=total+taxAmt;
         await sb.from('invoices').update({subtotal:total,tax_amount:taxAmt,total:invTotal}).eq('id',inv.id);
         await sb.from('invoice_items').delete().eq('invoice_id',inv.id);
-        await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name),sort_order:i})));
+        await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name,r.uom)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name,r.uom),sort_order:i})));
         toast('Sale + invoice updated!','ok');
       }else{toast('Sale updated!','ok');}
     }else{toast('Sale updated!','ok');}
@@ -1661,7 +1675,7 @@ async function doSavePurch(){
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('p-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('p-ref').value||''}).select().single();
       if(error)throw error;
-      await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name),sort_order:i})));
+      await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name,r.uom),sort_order:i})));
       srows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(!pr&&r.name&&!resolveP(r.name)){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
     }
     toast('Purchase recorded!','ok');
@@ -1705,7 +1719,7 @@ async function saveEditedPurch(){
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('ep-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('ep-notes').value||''}).select().single();
       if(error)throw error;
-      await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name),sort_order:i})));
+      await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name,r.uom),sort_order:i})));
       /* v6.5: master cost is no longer overwritten by the price on a saved purchase */
     }
     logAct('edit',`Purchase edited: ${rows.map(r=>r.supplier).filter((v,i,a)=>a.indexOf(v)===i).join(', ')}`);
@@ -1789,7 +1803,7 @@ async function confirmDrafts(){
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:d,supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes}).select().single();
       if(error)throw error;
-      if(p)await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name),sort_order:i})));
+      if(p)await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name,r.uom),sort_order:i})));
     }
     for(const r of rows)await sb.from('purchase_drafts').delete().eq('id',r.id);
     toast('Purchase created from drafts!','ok');await loadAll();rDfts();fillSels();
@@ -2287,7 +2301,7 @@ function expBkp(){
   const b={
     version:'v6',
     exportedAt:new Date().toISOString(),
-    appVersion:'v6.5',
+    appVersion:'v6.6',
     sales:S.sales,
     saleItems:S.sItems,
     purchases:S.purch,
@@ -2867,7 +2881,7 @@ async function saveAllBatch(){
       const supId=S.sups.find(s=>s.name===sup)?.id;
       const{data:p,error:pErr}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:entryDate,supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:'Batch scanned'}).select().single();
       if(pErr)throw pErr;
-      await sb.from('purchase_items').insert(rows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,product_id:pidOf(r.name),sort_order:i})));
+      await sb.from('purchase_items').insert(rows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,product_id:pidOf(r.name,r.uom),sort_order:i})));
       rows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(!pr&&r.name&&!resolveP(r.name)){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
       logAct('create',`Purchase (batch scan): ${sup} — RM ${fmt(total)} (${entryDate})`);
       saved++;
