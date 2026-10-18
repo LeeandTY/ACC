@@ -235,7 +235,7 @@ textarea.inp{resize:vertical;min-height:60px}
 </div>
 
 <div id="topbar">
-  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.6 · Pasar Pudu</small></div>
+  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.7 · Pasar Pudu</small></div>
   <div class="tb-ri">
     <button class="tbn" id="th-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbn" onclick="doSync()"><i class="fa-solid fa-arrows-rotate" id="sync-ic"></i></button>
@@ -1456,6 +1456,17 @@ async function doSaveSale(){
 }
 // ── PARSE OLD NOTES FORMAT INTO ITEM ROWS ──
 // Handles formats: "Item ×2", "Item x2", " | Item ×2, Item ×3"
+// v6.6: look up an old note word by exact name first, then alias (Oren, 苹果...), and pick pcs vs box twin for fruit
+function _noteProd(name,uom,qty){
+  let pr=S.prices.find(p=>p.name.toLowerCase()===name.toLowerCase());
+  if(!pr){const r=resolveP(name,uom); if(r)pr=S.prices.find(p=>p.id===r.id)||r;}
+  if(pr&&!uom&&normUom(pr.unit)==='box'&&qty>=6){
+    const b=x=>normNm(String(x.name).replace(/\s*\((box|pcs|ctn|nos)\)\s*$/i,''));
+    const tw=S.prices.find(x=>x.id!==pr.id&&b(x)===b(pr)&&normUom(x.unit)==='pcs');
+    if(tw)pr=tw;
+  }
+  return pr||null;
+}
 function parseNotesToRows(notes){
   if(!notes)return[];
   // Strip old " | " prefix from imported backup format
@@ -1472,12 +1483,12 @@ function parseNotesToRows(notes){
       const name=m[1].trim();
       const qty=parseFloat(m[2])||1;
       if(!name)continue;
-      const pr=S.prices.find(p=>p.name.toLowerCase()===name.toLowerCase());
-      rows.push({name,uom:pr?.unit||m[3].trim()||'',qty,unit_price:pr?.sell_price||0,total:(pr?.sell_price||0)*qty});
+      const pr=_noteProd(name,m[3].trim(),qty);
+      rows.push({name:pr?pr.name:name,uom:pr?.unit||m[3].trim()||'',qty,unit_price:pr?.sell_price||0,total:(pr?.sell_price||0)*qty});
     }else if(t){
       // No qty marker — treat as qty 1
-      const pr=S.prices.find(p=>p.name.toLowerCase()===t.toLowerCase());
-      rows.push({name:t,uom:pr?.unit||'',qty:1,unit_price:pr?.sell_price||0,total:pr?.sell_price||0});
+      const pr=_noteProd(t,'',1);
+      rows.push({name:pr?pr.name:t,uom:pr?.unit||'',qty:1,unit_price:pr?.sell_price||0,total:pr?.sell_price||0});
     }
   }
   return rows;
@@ -2301,7 +2312,7 @@ function expBkp(){
   const b={
     version:'v6',
     exportedAt:new Date().toISOString(),
-    appVersion:'v6.6',
+    appVersion:'v6.7',
     sales:S.sales,
     saleItems:S.sItems,
     purchases:S.purch,
