@@ -235,7 +235,7 @@ textarea.inp{resize:vertical;min-height:60px}
 </div>
 
 <div id="topbar">
-  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.8 · Pasar Pudu</small></div>
+  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v6.9 · Pasar Pudu</small></div>
   <div class="tb-ri">
     <button class="tbn" id="th-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbn" onclick="doSync()"><i class="fa-solid fa-arrows-rotate" id="sync-ic"></i></button>
@@ -1420,6 +1420,7 @@ async function doSaveSale(){
   const cn=S.custs.find(c=>c.id===cid)?.name||'Unknown';
   const rows=getSaleRows();
   if(!rows.length){toast('Add at least one item with a quantity','err');return;}
+  {const _z=rows.filter(r=>Number(r.qty)!==0&&!(Number(r.unit_price)>0)&&!(Number(r.unit_price)<0));if(_z.length&&!confirm('These items have NO PRICE and will be saved as RM 0:\n\n'+_z.slice(0,8).map(r=>'• '+r.name).join('\n')+(_z.length>8?'\n…and '+(_z.length-8)+' more':'')+'\n\nPress OK to save anyway, or Cancel to go back and fill the prices.'))return;}
   const autoTotal=rows.reduce((s,r)=>s+r.total,0);
   const manualTot=parseFloat($('s-manual-tot')?.value||0);
   const total=manualTot>0?manualTot:autoTotal;
@@ -1547,6 +1548,7 @@ async function saveEditedSale(){
   const keepName=rawCid.startsWith('keep:')?rawCid.slice(5):null;
   const cid=keepName?null:rawCid;
   const rows=getESRows();if(!rows.length){toast('Add at least one item','err');return;}
+  {const _z=rows.filter(r=>Number(r.qty)!==0&&!(Number(r.unit_price)>0)&&!(Number(r.unit_price)<0));if(_z.length&&!confirm('These items have NO PRICE and will be saved as RM 0:\n\n'+_z.slice(0,8).map(r=>'• '+r.name).join('\n')+(_z.length>8?'\n…and '+(_z.length-8)+' more':'')+'\n\nPress OK to save anyway, or Cancel to go back and fill the prices.'))return;}
   const autoTotal=rows.reduce((s,r)=>s+r.total,0);
   const manualTot=parseFloat($('es-manual-tot').value||0);
   const total=manualTot>0?manualTot:autoTotal;
@@ -2313,7 +2315,7 @@ function expBkp(){
   const b={
     version:'v6',
     exportedAt:new Date().toISOString(),
-    appVersion:'v6.8',
+    appVersion:'v6.9',
     sales:S.sales,
     saleItems:S.sItems,
     purchases:S.purch,
