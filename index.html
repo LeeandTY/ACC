@@ -319,7 +319,7 @@ img,canvas{max-width:100%}
 </div>
 
 <div id="topbar">
-  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v7.0 · Pasar Pudu</small></div>
+  <div class="tb-lo"><h1>L&amp;TY Trading</h1><small id="tb-dt">v7.2 · Pasar Pudu</small></div>
   <div class="tb-ri">
     <button class="tbn" id="th-btn" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i></button>
     <button class="tbn" onclick="doSync()"><i class="fa-solid fa-arrows-rotate" id="sync-ic"></i></button>
@@ -383,6 +383,8 @@ img,canvas{max-width:100%}
         </div>
       </div>
       <div class="fld"><label class="lbl">Notes <span style="font-weight:400;color:var(--t3)">(optional)</span></label><input class="inp" id="s-notes" placeholder="e.g. Credit, paid cash..."></div>
+      <div class="fld"><label class="lbl">Invoice payment <span style="font-weight:400;color:var(--t3)">— only applies when the date is before today</span></label>
+        <select class="inp" id="s-paystat"><option value="cash">Old sale: mark invoice Paid (Cash)</option><option value="transfer">Old sale: mark invoice Paid (Transfer)</option><option value="unpaid">Old sale: leave invoice Unpaid</option></select></div>
       <hr style="border:none;border-top:1px solid var(--bdr);margin:4px 0 12px">
       <div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:10px"><i class="fa-solid fa-box-open" style="color:var(--br);margin-right:6px"></i>Items sold <span style="font-size:11px;font-weight:400;color:var(--t3)">— price 0 = TBC</span></div>
       <div class="ie-scroll">
@@ -716,9 +718,10 @@ const S={
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const fmt=n=>Number(n??0).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
-const today=()=>new Date().toISOString().slice(0,10);
-const fom=()=>{const d=new Date();d.setDate(1);return d.toISOString().slice(0,10)};
-const lom=()=>new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISOString().slice(0,10);
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today=()=>ymd(new Date());
+const fom=()=>{const d=new Date();return ymd(new Date(d.getFullYear(),d.getMonth(),1))};
+const lom=()=>{const d=new Date();return ymd(new Date(d.getFullYear(),d.getMonth()+1,0))};
 const fmtD=s=>{if(!s)return'—';return new Date(s+'T00:00:00').toLocaleDateString('en-MY',{day:'numeric',month:'short',year:'numeric'})};
 const fmtDS=s=>{if(!s)return'—';return new Date(s+'T00:00:00').toLocaleDateString('en-MY',{day:'numeric',month:'short'})};
 const capSt=s=>({paid:'✓ Paid',unpaid:'✕ Unpaid',partial:'◑ Partial',draft:'Draft',sent:'Sent',overdue:'⚠ Overdue'}[s]||s||'—');
@@ -946,6 +949,52 @@ function costAtSale(name,uom){
   if(su&&mu&&su!==mu)return null;
   return Number(p.cost_price);
 }
+
+// ── v7.2: prices & costs as of the date of the record (not today's master) ──
+function _idx(){
+  if(S._ix)return S._ix;
+  const sd={},pd={};S.sales.forEach(x=>sd[x.id]=x);S.purch.forEach(x=>pd[x.id]=x);
+  const sIx={},pIx={};
+  S.sItems.forEach(i=>{const h=sd[i.sale_id];if(!h||!i.product_id)return;const u=Number(i.unit_price);if(!(u>0))return;(sIx[i.product_id]=sIx[i.product_id]||[]).push({d:h.entry_date,sid:h.id,cust:h.market_customer_id,uom:i.uom,price:u});});
+  S.pItems.forEach(i=>{const h=pd[i.purchase_id];if(!h||!i.product_id)return;const u=Number(i.unit_price);if(!(u>0))return;(pIx[i.product_id]=pIx[i.product_id]||[]).push({d:h.entry_date,pu:h.id,sup:h.supplier_name,uom:i.uom,price:u});});
+  Object.values(sIx).concat(Object.values(pIx)).forEach(a=>a.sort((x,y)=>y.d.localeCompare(x.d)));
+  return S._ix={sIx,pIx};
+}
+function _uomOk(lineUom,pid,wantUom){const mu=normUom((S.pAll.find(x=>x.id===pid)||{}).unit);return (normUom(lineUom)||mu)===(normUom(wantUom)||mu);}
+// Latest price on or before `date`: sales = same customer's last price; purchases = same supplier's last price (any supplier if none picked yet)
+function histPrice(isSale,pid,date,party,uom,excl){
+  if(!pid)return null;
+  const a=(isSale?_idx().sIx:_idx().pIx)[pid]||[];
+  for(const r of a){
+    if(r.d>date)continue;
+    if(excl&&(isSale?r.sid:r.pu)===excl)continue;
+    if(!_uomOk(r.uom,pid,uom))continue;
+    if(isSale){if(party&&r.cust===party)return{price:r.price,date:r.d};}
+    else{if(!party||r.sup===party)return{price:r.price,date:r.d};}
+  }
+  return null;
+}
+// Cost to freeze on a sale line. Today/future sale = master cost. Older sale = latest purchase price on or before the sale date (same unit), else master cost.
+function costAsOf(name,uom,date,pidHint){
+  if(!date||date>=today())return costAtSale(name,uom);
+  const pid=pidHint||pidOf(name,uom);
+  if(pid){for(const r of (_idx().pIx[pid]||[])){if(r.d>date)continue;if(_uomOk(r.uom,pid,uom))return r.price;}}
+  return costAtSale(name,uom);
+}
+async function recalcOldCosts(){
+  const from=rFrom,to=rTo,sById={};
+  S.sales.filter(x=>x.entry_date>=from&&x.entry_date<=to).forEach(x=>sById[x.id]=x);
+  const todo=[];
+  S.sItems.forEach(i=>{const h=sById[i.sale_id];if(!h||Number(i.total||0)===0)return;
+    const nc=costAsOf(i.name,i.uom,h.entry_date,i.product_id);if(nc==null)return;
+    const oc=i.cost_at_sale==null?null:Number(i.cost_at_sale);
+    if(oc==null||Math.abs(nc-oc)>0.0049)todo.push({id:i.id,nc});});
+  if(!todo.length){toast('Costs are already up to date','ok');return;}
+  if(!confirm(todo.length+' sale lines between '+fmtDS(from)+' and '+fmtDS(to)+' will take their cost from the latest purchase on or before each sale date (master cost if no purchase is found).\n\nThis changes the profit figures. Continue?'))return;
+  toast('Updating costs...','ok');
+  for(let k=0;k<todo.length;k+=20)await Promise.all(todo.slice(k,k+20).map(t=>sb.from('sale_items').update({cost_at_sale:t.nc}).eq('id',t.id)));
+  await loadAll();rRep();toast(todo.length+' lines updated','ok');
+}
 function marginReportData(from,to){
   const sById={};S.sales.filter(s=>s.entry_date>=from&&s.entry_date<=to).forEach(s=>{sById[s.id]=s;});
   const item={},cust={};let skipN=0,skipAmt=0;
@@ -967,7 +1016,7 @@ function marginCardsHtml(from,to){
       ||'<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--t3)">No data</td></tr>';};
   const head=lbl=>`<thead><tr><th>${lbl}</th><th class="n">Sales</th><th class="n">Profit</th><th class="n">Margin</th></tr></thead>`;
   const note=d.skipN?`<div class="info-box" style="border-radius:0;margin:0"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>${d.skipN} sale line${d.skipN>1?'s':''} (RM ${fmt(d.skipAmt)}) not counted — sold in a different unit from the product's cost unit, or no cost recorded yet.</div>`:'';
-  return `<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-chart-column" style="color:var(--grn)"></i>Profit by Item</span></div>${note}
+  return `<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-chart-column" style="color:var(--grn)"></i>Profit by Item</span><button class="btn btn-sm" onclick="recalcOldCosts()" title="Re-take each sale's cost from purchases on or before its date"><i class="fa-solid fa-rotate"></i> Recalc costs</button></div>${note}
   <div class="tw"><table class="tbl">${head('Item (top 15)')}<tbody>${rows(d.item,15)}</tbody></table></div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-user-tag" style="color:var(--grn)"></i>Profit by Customer</span></div>
   <div class="tw"><table class="tbl">${head('Customer')}<tbody>${rows(d.cust,0)}</tbody></table></div></div>`;
@@ -1108,7 +1157,7 @@ async function loadAll(){
   S.sales=sa.data||[];S.sItems=si.data||[];
   S.purch=pu.data||[];S.pItems=pi.data||[];
   S.aliases=al.data||[];S.pAll=pall.data||[];S.recon=rm.data||[];S.ovr=ov.data||[];S.pays=pa.data||[];S.prices=pr.data||[];S.exps=ex.data||[];S.drafts=dr.data||[];
-  S.invs=(iv.data||[]).map(inv=>{const pp=(pa.data||[]).filter(x=>x.invoice_id===inv.id);const pd=pp.reduce((t,x)=>t+Number(x.amount),0);let st=inv.status||'unpaid';if(pp.length)st=pd>=Number(inv.total)?'paid':'partial';return{...inv,_pays:pp,_paid:pd,status:st};});
+  S._ix=null;S.invs=(iv.data||[]).map(inv=>{const pp=(pa.data||[]).filter(x=>x.invoice_id===inv.id);const pd=pp.reduce((t,x)=>t+Number(x.amount),0);let st=inv.status||'unpaid';if(pp.length)st=pd>=Number(inv.total)?'paid':'partial';return{...inv,_pays:pp,_paid:pd,status:st};});
   fillSels();
 }
 
@@ -1159,9 +1208,9 @@ function goToDrafts(){gp('purch',document.querySelectorAll('.nb')[2]);setTimeout
 function setRange(k,btn){
   const n=new Date();
   if(k==='today')S.dFrom=S.dTo=today();
-  else if(k==='week'){const d=new Date();d.setDate(d.getDate()-6);S.dFrom=d.toISOString().slice(0,10);S.dTo=today();}
+  else if(k==='week'){const d=new Date();d.setDate(d.getDate()-6);S.dFrom=ymd(d);S.dTo=today();}
   else if(k==='month'){S.dFrom=fom();S.dTo=today();}
-  else if(k==='6m'){const d=new Date();d.setMonth(d.getMonth()-6);S.dFrom=d.toISOString().slice(0,10);S.dTo=today();}
+  else if(k==='6m'){const d=new Date();d.setMonth(d.getMonth()-6);S.dFrom=ymd(d);S.dTo=today();}
   else if(k==='year'){S.dFrom=n.getFullYear()+'-01-01';S.dTo=today();}
   document.querySelectorAll('#page-dash .rpill').forEach(b=>b.classList.remove('on'));btn?.classList.add('on');
   rDash();
@@ -1466,7 +1515,15 @@ function selAC(e,item,type){
   if(item.dataset.uom)row.querySelector('.uom-inp').value=item.dataset.uom;
   const isSale=(type==='sale'||type==='es');let price=isSale?parseFloat(item.dataset.sell||0):parseFloat(item.dataset.cost||0);
   if(isSale){const cv=(type==='es'?$('es-cust'):$('s-cust'))?.value||'';const ov=(S.ovr||[]).find(o=>o.market_customer_id===cv&&o.product_id===item.dataset.pid);if(ov&&Number(ov.sell_price)>0)price=Number(ov.sell_price);}
+  let _hn='';
+  {const dm={sale:'s-date',es:'es-date',purch:'p-date',ep:'ep-date'}[type];const dv=dm?($(dm)?.value||''):'';
+   if(dv&&dv<today()){
+     const party=isSale?((type==='es'?$('es-cust'):$('s-cust'))?.value||''):((type==='ep'?$('ep-sup'):$('p-sup'))?.value||'');
+     const h=histPrice(isSale,item.dataset.pid,dv,party,item.dataset.uom||'',type==='es'?_eS:(type==='ep'?_eP:null));
+     if(h){price=h.price;_hn='From the '+fmtDS(h.date)+' record';}
+   }}
   if(price>0)row.querySelector('.price-inp').value=price.toFixed(2);
+  row.querySelector('.price-inp').title=_hn;
   if(type==='purch'&&item.dataset.sup&&!$('p-sup')?.value)setPurchSupplier('p-sup',item.dataset.sup);
   item.parentElement.style.display='none';
   // Trigger focus on next field for better UX
@@ -1510,6 +1567,7 @@ async function doSaveSale(){
   const total=manualTot>0?manualTot:autoTotal;
   const desc=rows.map(r=>`${r.name} x${r.qty}`).join(', ');
   const d={entry_date:$('s-date').value||today(),customer_name:cn,market_customer_id:cid||null,amount:total,notes:$('s-notes').value||desc};
+  const _old=d.entry_date<today();const _pm=$('s-paystat')?.value||'cash';
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   try{
     let saleId=null;
@@ -1521,15 +1579,16 @@ async function doSaveSale(){
       if(cliId){
         try{
           const{data:num}=await sb.rpc('next_invoice_number');
-          const due=S.cfg.creditDays>0?new Date(Date.now()+S.cfg.creditDays*86400000).toISOString().slice(0,10):'';
+          const due=S.cfg.creditDays>0?ymd(new Date(new Date(d.entry_date+'T00:00:00').getTime()+S.cfg.creditDays*86400000)):'';
           const tax=S.cfg.sstOn?S.cfg.sstRate:0;const taxAmt=total*(tax/100);const invTotal=total+taxAmt;
-          const{data:inv,error:invErr}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cliId,invoice_number:num,status:'sent',issue_date:d.entry_date,due_date:due||null,tax_rate:tax,subtotal:total,tax_amount:taxAmt,total:invTotal,notes:S.cfg.terms||'',sale_id:saleId}).select().single();
+          const{data:inv,error:invErr}=await sb.from('invoices').insert({user_id:S.user.id,client_id:cliId,invoice_number:num,status:(_old&&_pm!=='unpaid'?'paid':'sent'),issue_date:d.entry_date,due_date:due||null,tax_rate:tax,subtotal:total,tax_amount:taxAmt,total:invTotal,notes:S.cfg.terms||'',sale_id:saleId}).select().single();
           if(invErr)throw invErr;
+          if(inv&&_old&&_pm!=='unpaid'&&invTotal>0){const{error:payErr}=await sb.from('invoice_payments').insert({invoice_id:inv.id,payment_date:d.entry_date,amount:invTotal,method:_pm,notes:'Old sale entered later'});if(payErr)console.warn('Auto payment failed:',payErr);}
           if(inv&&rows.length)await sb.from('invoice_items').insert(rows.map((r,i)=>({invoice_id:inv.id,description:`${(resolveP(r.name,r.uom)||{}).name||r.name}${r.uom?' ('+r.uom+')':''}`,quantity:r.qty,unit_price:r.unit_price,product_id:pidOf(r.name,r.uom),sort_order:i})));
         }catch(e){console.warn('Invoice auto-create failed:',e);toast('Sale saved but invoice failed: '+e.message,'err');}
       }
     }
-    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,product_id:pidOf(r.name,r.uom),cost_at_sale:costAtSale(r.name,r.uom),sort_order:i})));
+    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:saleId,...r,product_id:pidOf(r.name,r.uom),cost_at_sale:costAsOf(r.name,r.uom,d.entry_date),sort_order:i})));
     /* v6.5: master sell price is no longer overwritten by the price on a saved sale */
     toast('Sale recorded!','ok');
     logAct('create',`Sale: ${d.customer_name} — RM ${fmt(total)} (${d.entry_date})`);
@@ -1646,7 +1705,7 @@ async function saveEditedSale(){
     // keep the cost already recorded on each line — editing an old sale must not re-price its cost
     const oldCost={};getSI(_eS).forEach(x=>{if(x.cost_at_sale!=null&&x.product_id)oldCost[x.product_id+'|'+normUom(x.uom)]=Number(x.cost_at_sale);});
     await sb.from('sale_items').delete().eq('sale_id',_eS);
-    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name,r.uom),cost_at_sale:(oldCost[pidOf(r.name,r.uom)+'|'+normUom(r.uom)]??costAtSale(r.name,r.uom)),sort_order:i})));
+    if(rows.length)await sb.from('sale_items').insert(rows.map((r,i)=>({sale_id:_eS,...r,product_id:pidOf(r.name,r.uom),cost_at_sale:(oldCost[pidOf(r.name,r.uom)+'|'+normUom(r.uom)]??costAsOf(r.name,r.uom,saleDate)),sort_order:i})));
     // Update prices learn
     /* v6.5: master sell price is no longer overwritten by the price on a saved sale */
     // Sync invoice if one exists for this sale (match by client + date)
@@ -1769,6 +1828,7 @@ async function doSavePurch(){
     const manualPTotal=parseFloat($('p-manual-tot')?.value||0);
     {
       const srows=rows;
+      window._umCount=rows.filter(r=>!resolveP(r.name,r.uom)).length;
       const autoT=srows.reduce((s,r)=>s+r.total,0);
       const total=manualPTotal>0?manualPTotal:autoT;
       const desc=srows.map(r=>`${r.name} x${r.qty}`).join(', ');
@@ -1776,9 +1836,9 @@ async function doSavePurch(){
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('p-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('p-ref').value||''}).select().single();
       if(error)throw error;
       await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name,r.uom),sort_order:i})));
-      srows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(!pr&&r.name&&!resolveP(r.name)){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
+      
     }
-    toast('Purchase recorded!','ok');
+    toast('Purchase recorded!'+(window._umCount?' — '+window._umCount+' name(s) not mapped yet: see Settings > Product Names':''),'ok');window._umCount=0;
     logAct('create',`Purchase: ${sup} — RM ${fmt(rows.reduce((s,r)=>s+r.total,0))} (${$('p-date').value||today()})`);
     // Reset form
     $('p-items').innerHTML='';rc.p=0;$('p-ref').value='';$('p-tot').textContent='RM 0.00';$('p-manual-tot').value='';if($('p-sup'))$('p-sup').value='';
@@ -1810,8 +1870,7 @@ async function saveEditedPurch(){
   const manualTot=parseFloat($('ep-manual-tot').value||0);
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>';
   try{
-    await sb.from('daily_purchases').delete().eq('id',_eP);
-    await sb.from('purchase_items').delete().eq('purchase_id',_eP);
+    const _oldP=_eP;
     {
       const srows=rows;
       const autoT=srows.reduce((s,r)=>s+r.total,0);const total=manualTot>0?manualTot:autoT;
@@ -1820,7 +1879,7 @@ async function saveEditedPurch(){
       const{data:p,error}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:$('ep-date').value||today(),supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:$('ep-notes').value||''}).select().single();
       if(error)throw error;
       await sb.from('purchase_items').insert(srows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.total,product_id:pidOf(r.name,r.uom),sort_order:i})));
-      /* v6.5: master cost is no longer overwritten by the price on a saved purchase */
+      await sb.from('purchase_items').delete().eq('purchase_id',_oldP);await sb.from('daily_purchases').delete().eq('id',_oldP);
     }
     logAct('edit',`Purchase edited: ${rows.map(r=>r.supplier).filter((v,i,a)=>a.indexOf(v)===i).join(', ')}`);
     toast('Purchase updated!','ok');closeEditPurch();await loadAll();rPH();
@@ -2149,9 +2208,9 @@ let rFrom=fom(),rTo=today();
 function setRepRange(k,btn){
   const n=new Date();
   if(k==='today')rFrom=rTo=today();
-  else if(k==='week'){const d=new Date();d.setDate(d.getDate()-6);rFrom=d.toISOString().slice(0,10);rTo=today();}
+  else if(k==='week'){const d=new Date();d.setDate(d.getDate()-6);rFrom=ymd(d);rTo=today();}
   else if(k==='month'){rFrom=fom();rTo=today();}
-  else if(k==='lmon'){const d=new Date(n.getFullYear(),n.getMonth(),0),s=new Date(n.getFullYear(),n.getMonth()-1,1);rFrom=s.toISOString().slice(0,10);rTo=d.toISOString().slice(0,10);}
+  else if(k==='lmon'){const d=new Date(n.getFullYear(),n.getMonth(),0),s=new Date(n.getFullYear(),n.getMonth()-1,1);rFrom=ymd(s);rTo=ymd(d);}
   else if(k==='year'){rFrom=n.getFullYear()+'-01-01';rTo=today();}
   $('rp-f').value=rFrom;$('rp-t').value=rTo;
   document.querySelectorAll('#page-rep .rpill').forEach(b=>b.classList.remove('on'));btn?.classList.add('on');
@@ -2401,7 +2460,7 @@ function expBkp(){
   const b={
     version:'v6',
     exportedAt:new Date().toISOString(),
-    appVersion:'v7.0',
+    appVersion:'v7.2',
     sales:S.sales,
     saleItems:S.sItems,
     purchases:S.purch,
@@ -2982,7 +3041,7 @@ async function saveAllBatch(){
       const{data:p,error:pErr}=await sb.from('daily_purchases').insert({user_id:S.user.id,entry_date:entryDate,supplier_name:sup,supplier_id:supId||null,amount:total,category:'Purchases - Misc',description:desc,receipt_type:'Printed Receipt',notes:'Batch scanned'}).select().single();
       if(pErr)throw pErr;
       await sb.from('purchase_items').insert(rows.map((r,i)=>({purchase_id:p.id,name:r.name,uom:r.uom,qty:r.qty,unit_price:r.unit_price,total:r.qty*r.unit_price,product_id:pidOf(r.name,r.uom),sort_order:i})));
-      rows.forEach(r=>{const pr=S.prices.find(x=>x.name.toLowerCase()===r.name.toLowerCase());if(!pr&&r.name&&!resolveP(r.name)){sb.from('prices').insert({user_id:S.user.id,name:r.name,unit:r.uom,cost_price:r.unit_price,sell_price:0,stock_qty:0,active:true}).then();}});
+      
       logAct('create',`Purchase (batch scan): ${sup} — RM ${fmt(total)} (${entryDate})`);
       saved++;
     }catch(e){failed++;}
