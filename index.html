@@ -1457,7 +1457,7 @@ function gp(id,btn){
   window.scrollTo(0,0);
   rPage(id);
 }
-function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}if($('rc-date')&&!$('rc-date').value)$('rc-date').value=today();rRep();rRecon();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();},50);}}
+function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}if($('rc-date')&&!$('rc-date').value)$('rc-date').value=today();rRep();rRecon();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();rUsers();},50);}}
 function stab(t,btn){$('s-add').style.display=t==='add'?'block':'none';$('s-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#page-sales .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rSH();}
 function ptab(t,btn){['add','hist','exp','dft'].forEach(k=>$('p-'+k).style.display=t===k?'block':'none');document.querySelectorAll('#page-purch .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rPH();else if(t==='exp')rEH();else if(t==='dft')rDfts();}
 function etab(t,btn){$('exp-add').style.display=t==='add'?'block':'none';$('exp-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#p-exp .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rEH();}
@@ -2691,10 +2691,46 @@ function rSet(){
     </div>
   </div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-clock-rotate-left"></i>Activity Log</span></div><div id="act-log-bd" style="max-height:280px;overflow-y:auto"></div></div>
+  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-user-shield"></i>Manage Users</span></div>
+    <div class="info-box" style="margin:10px 16px 0">Only emails on this list can sign in and see the data. A new person adds their login with <strong>Sign Up</strong> on the sign-in screen, using the email you add here. Removing someone locks them out straight away.</div>
+    <div class="card-bd" style="padding-bottom:6px"><div style="display:flex;gap:8px"><input class="inp" type="email" id="usr-em" placeholder="new.user@email.com" autocomplete="off" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter')addUser()"><button class="btn btn-pr" onclick="addUser()"><i class="fa-solid fa-user-plus"></i> Add</button></div></div>
+    <div id="usr-bd"></div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-right-from-bracket"></i>Account</span></div><div class="card-bd">
     <p style="font-size:13px;color:var(--t3);margin-bottom:12px">Signed in as: <strong>${esc(S.user?.email||'')}</strong></p>
     <button class="btn btn-rd btn-sm" onclick="doSignOut()"><i class="fa-solid fa-right-from-bracket"></i> Sign Out</button>
   </div></div>`;
+}
+/* ---- Manage Users (whitelist = allowed_emails table; RLS lets only listed emails in) ---- */
+async function rUsers(){
+  const el=$('usr-bd');if(!el)return;
+  el.innerHTML='<div style="color:var(--t3);font-size:13px;padding:12px 16px">Loading…</div>';
+  const[a,p]=await Promise.all([sb.from('allowed_emails').select('*').order('id'),sb.from('profiles').select('id,email,created_at')]);
+  if(a.error){el.innerHTML=`<div style="color:var(--red);font-size:13px;padding:12px 16px">${esc(a.error.message)}</div>`;return;}
+  S._allowed=a.data||[];
+  const prof={};(p.data||[]).forEach(x=>{prof[(x.email||'').toLowerCase()]=x;});
+  const me=(S.user?.email||'').toLowerCase();
+  el.innerHTML=S._allowed.map(u=>{
+    const e=(u.email||'').toLowerCase(),pr=prof[e],isMe=e===me;
+    const sub=pr&&pr.created_at?'Active · joined '+fmtDS(String(pr.created_at).slice(0,10)):'Invited · not signed up yet';
+    return `<div class="cat-row" style="padding:10px 16px;gap:10px"><div style="min-width:0"><div style="color:var(--t1);font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(u.email)}${isMe?' <span class="bdg b-paid" style="margin-left:4px">You</span>':''}</div><div style="font-size:11px;color:var(--t3);margin-top:2px">${sub}</div></div>${isMe?'':`<button class="btn btn-rd btn-sm btn-ic" title="Remove" onclick="rmUser(${u.id})"><i class="fa-solid fa-user-minus"></i></button>`}</div>`;
+  }).join('')||'<div style="color:var(--t3);font-size:13px;padding:12px 16px">No users</div>';
+}
+async function addUser(){
+  const inp=$('usr-em'),e=(inp.value||'').trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){toast('Enter a valid email','err');return;}
+  if((S._allowed||[]).some(u=>(u.email||'').toLowerCase()===e)){toast('That email is already on the list','err');return;}
+  const{error}=await sb.from('allowed_emails').insert({email:e});
+  if(error){toast(error.message,'err');return;}
+  inp.value='';toast('User added — they can now Sign Up with '+e,'ok');rUsers();
+}
+async function rmUser(id){
+  const u=(S._allowed||[]).find(x=>x.id===id);if(!u)return;
+  if((u.email||'').toLowerCase()===(S.user?.email||'').toLowerCase()){toast("You can't remove yourself",'err');return;}
+  if((S._allowed||[]).length<=1){toast('At least one user must remain','err');return;}
+  if(!confirm('Remove '+u.email+'?\n\nThey will no longer be able to see any data in the app.'))return;
+  const{error}=await sb.from('allowed_emails').delete().eq('id',id);
+  if(error){toast(error.message,'err');return;}
+  toast('User removed','ok');rUsers();
 }
 function applySet(){S.cfg.company=$('sc-co')?.value||S.cfg.company;S.cfg.address=$('sc-ad')?.value||S.cfg.address;S.cfg.phone=$('sc-ph')?.value||'';S.cfg.regNo=$('sc-rg')?.value||'';S.cfg.sstOn=$('sc-sst')?.checked||false;S.cfg.sstRate=Number($('sc-sr')?.value||6);S.cfg.creditDays=Number($('sc-cd')?.value||30);S.cfg.terms=$('sc-tm')?.value||'';saveCfg();rSet();}
 function addEC(){const v=prompt('New category:');if(v?.trim()){S.cfg.expCats.push(v.trim());saveCfg();rSet();}}
