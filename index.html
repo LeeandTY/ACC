@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -288,6 +288,59 @@ img,canvas{max-width:100%}
   #topbar{height:calc(46px + env(safe-area-inset-top))}
 }
 
+/* ---- Jarvis neon app theme (dark = neon green; light stays as the plain option) ---- */
+[data-theme="dark"]{
+  --br:#39ff88;--brd:#00e676;--brl:rgba(57,255,136,.12);
+  --bg:#040807;--card:rgba(8,20,14,.9);--surf:rgba(57,255,136,.06);
+  --t1:#eafff2;--t2:#c9f5da;--t3:rgba(200,255,220,.62);--t4:rgba(200,255,220,.4);
+  --bdr:rgba(57,255,136,.18);--bdr2:rgba(57,255,136,.35);
+  --grn:#39ff88;--gnl:rgba(57,255,136,.14);--red:#ff5c6c;--rdl:rgba(255,92,108,.14);--pur:#b388ff;--pul:rgba(179,136,255,.14);
+  --sh:0 0 0 1px rgba(57,255,136,.14),0 0 18px rgba(57,255,136,.07);--sh2:0 0 30px rgba(57,255,136,.25);
+}
+[data-theme="dark"] body{background:#040807;position:relative}
+[data-theme="dark"] body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+  radial-gradient(ellipse 70% 45% at 50% 0%,rgba(57,255,136,.13),transparent 70%),
+  linear-gradient(rgba(57,255,136,.045) 1px,transparent 1px) 0 0/44px 44px,
+  linear-gradient(90deg,rgba(57,255,136,.045) 1px,transparent 1px) 0 0/44px 44px}
+[data-theme="dark"] #topbar{background:rgba(4,12,8,.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid rgba(57,255,136,.35);box-shadow:0 0 22px rgba(57,255,136,.18)}
+[data-theme="dark"] .tb-lo h1{color:#eafff2;letter-spacing:2.5px;text-transform:uppercase;font-size:14px;text-shadow:0 0 10px rgba(57,255,136,.55)}
+[data-theme="dark"] .tb-lo small{color:var(--br);opacity:.8;letter-spacing:1.5px;text-transform:uppercase;font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+[data-theme="dark"] .tbn{color:var(--br)}
+[data-theme="dark"] .tbn:hover{background:rgba(57,255,136,.14)}
+[data-theme="dark"] #bnav{background:rgba(4,12,8,.95);border-right:1px solid rgba(57,255,136,.3);box-shadow:0 0 22px rgba(57,255,136,.12)}
+[data-theme="dark"] #nav-tgl{background:rgba(57,255,136,.08);border:1px solid rgba(57,255,136,.4);box-shadow:0 0 12px rgba(57,255,136,.3)}
+[data-theme="dark"] .nb.on{box-shadow:inset 0 0 14px rgba(57,255,136,.12);text-shadow:0 0 8px rgba(57,255,136,.6)}
+[data-theme="dark"] .nb.on i{filter:drop-shadow(0 0 5px #39ff88)}
+[data-theme="dark"] .card,[data-theme="dark"] .mc{border:1px solid rgba(57,255,136,.2);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+[data-theme="dark"] .mc::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--br);box-shadow:0 0 10px var(--br)}
+[data-theme="dark"] .mc-val{text-shadow:0 0 10px rgba(57,255,136,.3)}
+[data-theme="dark"] .mc-val.r{text-shadow:0 0 10px rgba(255,92,108,.35)}
+[data-theme="dark"] .mc-lbl,[data-theme="dark"] .tbl th,[data-theme="dark"] .lbl,[data-theme="dark"] .day-hd,[data-theme="dark"] .ie-head span,[data-theme="dark"] .ie-p-head span{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:1.4px;color:rgba(57,255,136,.8)}
+[data-theme="dark"] .card-ti{text-shadow:0 0 10px rgba(57,255,136,.25)}
+[data-theme="dark"] .inp,[data-theme="dark"] .ie-row input,[data-theme="dark"] .ie-row select,[data-theme="dark"] .ie-p-row input,[data-theme="dark"] .ie-p-row select{background:rgba(2,10,6,.85);border-color:rgba(57,255,136,.28);color:#eafff2}
+[data-theme="dark"] .inp:focus,[data-theme="dark"] .ie-row input:focus,[data-theme="dark"] .ie-row select:focus,[data-theme="dark"] .ie-p-row input:focus,[data-theme="dark"] .ie-p-row select:focus{border-color:var(--br);box-shadow:0 0 0 3px rgba(57,255,136,.14),0 0 14px rgba(57,255,136,.28)}
+[data-theme="dark"] .inp::placeholder{color:rgba(200,255,220,.3)}
+[data-theme="dark"] select option{background:#06130d;color:#eafff2}
+[data-theme="dark"] .btn{background:rgba(57,255,136,.05);border-color:rgba(57,255,136,.3);color:var(--t2)}
+[data-theme="dark"] .btn:hover{background:rgba(57,255,136,.14);box-shadow:0 0 12px rgba(57,255,136,.25)}
+[data-theme="dark"] .btn-pr,[data-theme="dark"] .btn-gn,[data-theme="dark"] .rpill.on{background:linear-gradient(135deg,#39ff88,#00e676);border-color:transparent;color:#03140a;font-weight:800;box-shadow:0 0 14px rgba(57,255,136,.45)}
+[data-theme="dark"] .btn-pr:hover,[data-theme="dark"] .btn-gn:hover{background:linear-gradient(135deg,#39ff88,#00e676);box-shadow:0 0 24px rgba(57,255,136,.8)}
+[data-theme="dark"] .btn-rd{background:rgba(255,92,108,.18);border-color:#ff5c6c;color:#ff8a96}
+[data-theme="dark"] .btn-pu{background:rgba(179,136,255,.18);border-color:#b388ff;color:#d0b8ff}
+[data-theme="dark"] .rpill{border-color:rgba(57,255,136,.28)}
+[data-theme="dark"] .tab.on{box-shadow:inset 0 0 0 1px rgba(57,255,136,.4),0 0 10px rgba(57,255,136,.2)}
+[data-theme="dark"] .page>.tabs{background:rgba(4,12,8,.95);border-top:1px solid rgba(57,255,136,.3);box-shadow:0 -4px 20px rgba(57,255,136,.12)}
+[data-theme="dark"] .tbl tbody tr:hover td{background:rgba(57,255,136,.07)}
+[data-theme="dark"] #ov{background:rgba(2,6,4,.82)}
+[data-theme="dark"] #mb{background:#06110b;border:1px solid rgba(57,255,136,.35);border-bottom:0;box-shadow:0 0 40px rgba(57,255,136,.2)}
+@media(min-width:600px){[data-theme="dark"] #mb{border-bottom:1px solid rgba(57,255,136,.35)}}
+[data-theme="dark"] #toast{background:#06130d;color:var(--br);border:1px solid var(--br);box-shadow:0 0 18px rgba(57,255,136,.4)}
+[data-theme="dark"] #toast.err{color:#ff8a96;border-color:#ff5c6c;box-shadow:0 0 18px rgba(255,92,108,.4);background:#160a0c}
+[data-theme="dark"] .info-box{color:var(--t2)}
+[data-theme="dark"] .ac-drop{background:#06130d}
+[data-theme="dark"] .b-paid,[data-theme="dark"] .b-unpaid,[data-theme="dark"] .b-overdue{border:1px solid currentColor}
+[data-theme="dark"] .spin{border-color:rgba(3,20,10,.3);border-top-color:#03140a}
+
 /* ---- Jarvis neon sign-in (green) ---- */
 #auth{--nn:#39ff88;--nn2:#00e676;--nd:rgba(57,255,136,.35);background:#040807;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 #auth::before{content:"";position:absolute;inset:0;background:
@@ -297,10 +350,7 @@ img,canvas{max-width:100%}
   -webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 45%,#000 30%,transparent 100%);mask-image:radial-gradient(ellipse 80% 70% at 50% 45%,#000 30%,transparent 100%)}
 #auth::after{content:"";position:absolute;left:0;right:0;height:120px;top:-120px;background:linear-gradient(transparent,rgba(57,255,136,.10),transparent);animation:authscan 6s linear infinite;pointer-events:none}
 @keyframes authscan{to{transform:translateY(calc(100vh + 240px))}}
-#auth-box{position:relative;z-index:1;background:rgba(6,16,11,.82);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--nd);border-radius:18px;padding:30px 24px 24px;max-width:380px;box-shadow:0 0 0 1px rgba(57,255,136,.08),0 0 40px rgba(57,255,136,.18),inset 0 0 30px rgba(57,255,136,.05)}
-#auth-box::before,#auth-box::after{content:"";position:absolute;width:22px;height:22px;border:2px solid var(--nn);filter:drop-shadow(0 0 5px var(--nn))}
-#auth-box::before{top:-2px;left:-2px;border-right:0;border-bottom:0;border-top-left-radius:18px}
-#auth-box::after{bottom:-2px;right:-2px;border-left:0;border-top:0;border-bottom-right-radius:18px}
+#auth-box{position:relative;z-index:1;background:none;border:0;border-radius:0;box-shadow:none;padding:10px 6px;max-width:360px}
 #auth-box .logo-wrap{position:relative;width:96px;height:96px;margin:0 auto 16px;display:flex;align-items:center;justify-content:center}
 #auth-box .ring{position:absolute;inset:0;border-radius:50%;border:1.5px dashed rgba(57,255,136,.55);animation:authspin 14s linear infinite}
 #auth-box .ring.r2{inset:7px;border:1.5px solid transparent;border-top-color:var(--nn);border-bottom-color:var(--nn);animation-duration:5s;animation-direction:reverse;filter:drop-shadow(0 0 4px var(--nn))}
@@ -326,11 +376,77 @@ img,canvas{max-width:100%}
 #auth #a-ok{color:var(--nn)!important}
 #auth .foot{text-align:center;font-size:10px;letter-spacing:2px;color:rgba(200,255,220,.3);margin-top:18px;text-transform:uppercase}
 
+/* ---- Jarvis boot / loading screen ---- */
+#boot{position:fixed;inset:0;z-index:600;background:#040807;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:24px;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;transition:opacity .5s ease,transform .5s ease}
+#boot.out{opacity:0;transform:scale(1.04);pointer-events:none}
+#boot::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(ellipse 55% 45% at 50% 42%,rgba(57,255,136,.18),transparent 70%),
+  linear-gradient(rgba(57,255,136,.07) 1px,transparent 1px) 0 0/44px 44px,
+  linear-gradient(90deg,rgba(57,255,136,.07) 1px,transparent 1px) 0 0/44px 44px;
+  -webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 45%,#000 30%,transparent 100%);mask-image:radial-gradient(ellipse 80% 70% at 50% 45%,#000 30%,transparent 100%)}
+#boot::after{content:"";position:absolute;left:0;right:0;height:120px;top:-120px;background:linear-gradient(transparent,rgba(57,255,136,.10),transparent);animation:authscan 5s linear infinite;pointer-events:none}
+#boot .b-core{position:relative;z-index:1;width:190px;height:190px;display:flex;align-items:center;justify-content:center;margin-bottom:26px}
+#boot .b-ring{position:absolute;border-radius:50%}
+#boot .b-r1{inset:0;border:1.5px dashed rgba(57,255,136,.5);animation:authspin 16s linear infinite}
+#boot .b-r2{inset:14px;border:2px solid transparent;border-top-color:#39ff88;border-bottom-color:#39ff88;filter:drop-shadow(0 0 6px #39ff88);animation:authspin 2.6s linear infinite}
+#boot .b-r3{inset:30px;border:1.5px solid transparent;border-left-color:rgba(57,255,136,.8);border-right-color:rgba(57,255,136,.8);animation:authspin 4s linear infinite reverse}
+#boot .b-r4{inset:46px;border:1px solid rgba(57,255,136,.25)}
+#boot .b-logo{width:70px;height:70px;border-radius:18px;background:#06130d;border:2.5px solid #39ff88;color:#39ff88;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:21px;font-weight:900;letter-spacing:-.5px;text-shadow:0 0 10px #39ff88,0 0 22px rgba(57,255,136,.6);box-shadow:0 0 18px rgba(57,255,136,.6),inset 0 0 14px rgba(57,255,136,.25);animation:authpulse 2s ease-in-out infinite}
+#boot .b-title{position:relative;z-index:1;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;font-weight:800;letter-spacing:5px;text-transform:uppercase;color:#eafff2;text-shadow:0 0 12px rgba(57,255,136,.5);margin-bottom:6px;text-align:center}
+#boot .b-sub{position:relative;z-index:1;font-size:10.5px;letter-spacing:3px;text-transform:uppercase;color:rgba(57,255,136,.7);margin-bottom:26px;text-align:center}
+#boot .b-barwrap{position:relative;z-index:1;width:min(300px,78vw);height:6px;border-radius:6px;background:rgba(57,255,136,.1);border:1px solid rgba(57,255,136,.3);overflow:hidden}
+#boot .b-bar{height:100%;width:0;background:linear-gradient(90deg,#00e676,#39ff88);box-shadow:0 0 12px #39ff88;border-radius:6px;transition:width .3s ease}
+#boot .b-meta{position:relative;z-index:1;width:min(300px,78vw);display:flex;justify-content:space-between;margin-top:10px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase}
+#boot .b-line{color:#39ff88;text-shadow:0 0 8px rgba(57,255,136,.5)}
+#boot .b-line::after{content:"_";animation:authblink 1s steps(1) infinite}
+#boot .b-pct{color:rgba(200,255,220,.6)}
+
+/* ---- J.A.R.V.I.S. monthly briefing ---- */
+#brief{position:fixed;inset:0;z-index:550;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(2,6,4,.88);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;transition:opacity .35s ease;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-y:auto}
+#brief.on{opacity:1}
+#brief::before{content:"";position:fixed;inset:0;background:radial-gradient(ellipse 60% 50% at 50% 35%,rgba(57,255,136,.14),transparent 70%),linear-gradient(rgba(57,255,136,.06) 1px,transparent 1px) 0 0/44px 44px,linear-gradient(90deg,rgba(57,255,136,.06) 1px,transparent 1px) 0 0/44px 44px;pointer-events:none}
+#brief .br-box{position:relative;width:100%;max-width:440px;margin:auto;background:rgba(6,16,11,.9);border:1px solid rgba(57,255,136,.35);border-radius:18px;padding:24px 20px 18px;box-shadow:0 0 40px rgba(57,255,136,.2),inset 0 0 30px rgba(57,255,136,.05);transform:translateY(14px) scale(.98);transition:transform .4s cubic-bezier(.2,.8,.2,1)}
+#brief.on .br-box{transform:none}
+#brief .br-box::before,#brief .br-box::after{content:"";position:absolute;width:22px;height:22px;border:2px solid #39ff88;filter:drop-shadow(0 0 5px #39ff88)}
+#brief .br-box::before{top:-2px;left:-2px;border-right:0;border-bottom:0;border-top-left-radius:18px}
+#brief .br-box::after{bottom:-2px;right:-2px;border-left:0;border-top:0;border-bottom-right-radius:18px}
+#brief .br-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+#brief .br-orb{position:relative;flex:0 0 54px;width:54px;height:54px;display:flex;align-items:center;justify-content:center}
+#brief .br-orb i{position:absolute;border-radius:50%}
+#brief .br-orb .o1{inset:0;border:1.5px dashed rgba(57,255,136,.55);animation:authspin 12s linear infinite}
+#brief .br-orb .o2{inset:6px;border:2px solid transparent;border-top-color:#39ff88;border-bottom-color:#39ff88;filter:drop-shadow(0 0 4px #39ff88);animation:authspin 3s linear infinite reverse}
+#brief .br-orb .o3{width:14px;height:14px;position:static;background:#39ff88;box-shadow:0 0 14px #39ff88,0 0 28px rgba(57,255,136,.6);animation:authpulse 2s ease-in-out infinite}
+#brief.speaking .br-orb .o3{animation-duration:.7s}
+#brief .br-tag{font-size:9.5px;letter-spacing:1.6px;white-space:nowrap;text-transform:uppercase;color:#39ff88;opacity:.85}
+#brief .br-greet{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:20px;font-weight:800;color:#eafff2;text-shadow:0 0 12px rgba(57,255,136,.4);line-height:1.2;margin:2px 0}
+#brief .br-mon{font-size:11px;letter-spacing:1px;color:rgba(200,255,220,.55)}
+#brief .br-cards{display:grid;gap:10px;margin-bottom:14px}
+#brief .br-card{position:relative;background:rgba(57,255,136,.05);border:1px solid rgba(57,255,136,.25);border-radius:12px;padding:12px 14px;overflow:hidden}
+#brief .br-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#39ff88;box-shadow:0 0 10px #39ff88}
+#brief .br-lbl{font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:rgba(57,255,136,.8);margin-bottom:4px}
+#brief .br-val{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:24px;font-weight:800;color:#eafff2;text-shadow:0 0 10px rgba(57,255,136,.35)}
+#brief .br-sub{font-size:11.5px;color:rgba(200,255,220,.6);margin-top:2px}
+#brief .br-row{display:flex;gap:8px;margin-bottom:12px}
+#brief .br-b{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 8px;border-radius:10px;border:1px solid rgba(57,255,136,.35);background:rgba(57,255,136,.06);color:#39ff88;font-family:inherit;font-size:11.5px;letter-spacing:1px;text-transform:uppercase;font-weight:700;cursor:pointer;touch-action:manipulation;min-height:42px}
+#brief .br-b:hover{background:rgba(57,255,136,.14);box-shadow:0 0 14px rgba(57,255,136,.3)}
+#brief .br-b.off{color:rgba(200,255,220,.45);border-color:rgba(200,255,220,.2)}
+#brief .br-go{width:100%;padding:13px;border:0;border-radius:11px;background:linear-gradient(135deg,#39ff88,#00e676);color:#03140a;font-family:inherit;font-size:13px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(57,255,136,.5);min-height:46px}
+#brief .br-go:hover{box-shadow:0 0 30px rgba(57,255,136,.85)}
+#brief .br-chk{display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12px;color:rgba(200,255,220,.7);cursor:pointer;user-select:none}
+#brief .br-chk input{width:17px;height:17px;accent-color:#39ff88;flex:0 0 auto}
+
 /* ---- Respect reduced motion ---- */
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+<div id="boot">
+  <div class="b-core"><span class="b-ring b-r1"></span><span class="b-ring b-r2"></span><span class="b-ring b-r3"></span><span class="b-ring b-r4"></span><div class="b-logo">L&amp;TY</div></div>
+  <div class="b-title">Lee &amp; TY Trading</div>
+  <div class="b-sub">InvoiceOS · Initialising</div>
+  <div class="b-barwrap"><div class="b-bar" id="boot-bar"></div></div>
+  <div class="b-meta"><span class="b-line" id="boot-line">Starting up...</span><span class="b-pct" id="boot-pct">0%</span></div>
+</div>
 <div id="auth" style="display:none">
   <div id="auth-box">
     <div class="logo-wrap"><span class="ring"></span><span class="ring r2"></span><div class="logo">L&amp;TY</div></div>
@@ -355,6 +471,26 @@ img,canvas{max-width:100%}
     <p id="a-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none"></p>
     <p id="a-ok" style="color:var(--grn);font-size:12px;margin-top:10px;display:none"></p>
     <div class="foot">System online · Encrypted</div>
+  </div>
+</div>
+
+<div id="brief" role="dialog" aria-modal="true" aria-labelledby="br-greet">
+  <div class="br-box">
+    <div class="br-head">
+      <div class="br-orb"><i class="o1"></i><i class="o2"></i><i class="o3"></i></div>
+      <div>
+        <div class="br-tag">J.A.R.V.I.S. · Monthly briefing</div>
+        <div class="br-greet" id="br-greet">Hello.</div>
+        <div class="br-mon" id="br-mon"></div>
+      </div>
+    </div>
+    <div class="br-cards" id="br-cards"></div>
+    <div class="br-row">
+      <button class="br-b" onclick="speakBrief()"><i class="fa-solid fa-rotate-right"></i> Replay voice</button>
+      <button class="br-b" id="br-vbtn" onclick="toggleBriefVoice()"><i class="fa-solid fa-volume-high"></i> Voice: on</button>
+    </div>
+    <button class="br-go" onclick="closeBrief()">Enter dashboard</button>
+    <label class="br-chk"><input type="checkbox" id="br-show" onchange="setBriefShow(this.checked)"> Show this briefing every time I sign in</label>
   </div>
 </div>
 
@@ -1137,17 +1273,99 @@ function clov(e){if(e.target===$('ov'))closeM();}
   document.addEventListener('mousedown',down);
 })();
 
-function toggleTheme(){const d=document.documentElement,t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);localStorage.setItem('lty_th',t);$('th-btn').innerHTML=t==='dark'?'<i class="fa-solid fa-sun"></i>':'<i class="fa-solid fa-moon"></i>';}
-function applyTheme(){const t=localStorage.getItem('lty_th')||'light';document.documentElement.setAttribute('data-theme',t);$('th-btn').innerHTML=t==='dark'?'<i class="fa-solid fa-sun"></i>':'<i class="fa-solid fa-moon"></i>';}
+function toggleTheme(){const d=document.documentElement,t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);localStorage.setItem('lty_th',t);chartTheme(t);$('th-btn').innerHTML=t==='dark'?'<i class="fa-solid fa-sun"></i>':'<i class="fa-solid fa-moon"></i>';}
+function chartTheme(t){try{if(window.Chart){Chart.defaults.color=t==='dark'?'rgba(200,255,220,.7)':'#666';Chart.defaults.borderColor=t==='dark'?'rgba(57,255,136,.12)':'rgba(0,0,0,.1)';}}catch(e){}}
+function applyTheme(){const t=localStorage.getItem('lty_th')||'dark';document.documentElement.setAttribute('data-theme',t);chartTheme(t);$('th-btn').innerHTML=t==='dark'?'<i class="fa-solid fa-sun"></i>':'<i class="fa-solid fa-moon"></i>';}
 
 function authTab(t,btn){$('auth-in').style.display=t==='in'?'block':'none';$('auth-up').style.display=t==='up'?'block':'none';document.querySelectorAll('.auth-tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');$('a-err').style.display='none';$('a-ok').style.display='none';}
+/* Jarvis loading screen */
+const BOOT_LINES=['Initialising core','Connecting to database','Securing session','Loading products & prices','Syncing invoices','Calibrating reports'];
+let _bootT=Date.now(),_bootI=null,_bootF=null,_briefPending=false,_briefTxt='';
+
+/* J.A.R.V.I.S. monthly briefing */
+const briefOn=()=>{try{return localStorage.getItem('lty_brief_show')!=='0';}catch(e){return true;}};
+const voiceOn=()=>{try{return localStorage.getItem('lty_brief_voice')!=='0';}catch(e){return true;}};
+function setBriefShow(v){try{localStorage.setItem('lty_brief_show',v?'1':'0');}catch(e){}}
+function userName(){
+  const u=S.user||{},m=u.user_metadata||{};let n=m.name||m.full_name||m.display_name;
+  if(!n){n=(u.email||'').split('@')[0].split(/[._\-\d]+/).filter(Boolean)[0]||'there';}
+  return n.charAt(0).toUpperCase()+n.slice(1);
+}
+function paintVoiceBtn(){const on=voiceOn(),b=$('br-vbtn');b.classList.toggle('off',!on);b.innerHTML=`<i class="fa-solid ${on?'fa-volume-high':'fa-volume-xmark'}"></i> Voice: ${on?'on':'off'}`;}
+function toggleBriefVoice(){
+  const on=!voiceOn();try{localStorage.setItem('lty_brief_voice',on?'1':'0');}catch(e){}
+  paintVoiceBtn();
+  if(on)speakBrief();else{try{speechSynthesis.cancel();}catch(e){}$('brief').classList.remove('speaking');}
+}
+function speakBrief(){
+  if(!('speechSynthesis' in window)||!_briefTxt)return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(_briefTxt),vs=speechSynthesis.getVoices();
+    const v=vs.find(x=>/en[-_]GB/i.test(x.lang)&&/male|daniel|arthur|oliver/i.test(x.name))||vs.find(x=>/en[-_]GB/i.test(x.lang))||vs.find(x=>/^en/i.test(x.lang));
+    if(v){u.voice=v;u.lang=v.lang;}else u.lang='en-GB';
+    u.rate=.96;u.pitch=.9;
+    u.onstart=()=>$('brief').classList.add('speaking');
+    u.onend=u.onerror=()=>$('brief').classList.remove('speaking');
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function showBrief(){
+  const now=new Date(),h=now.getHours(),g=h<12?'Good morning':h<18?'Good afternoon':'Good evening';
+  const f=fom(),t=today();
+  const sa=S.sales.filter(s=>s.entry_date>=f&&s.entry_date<=t);
+  const pu=S.purch.filter(p=>p.entry_date>=f&&p.entry_date<=t);
+  const ex=S.exps.filter(e=>e.entry_date>=f&&e.entry_date<=t);
+  const ts=sumAmt(sa),tp=sumAmt(pu),te=sumAmt(ex),avg=sa.length?ts/sa.length:0;
+  const nm=userName(),rd=n=>Math.round(n).toLocaleString('en-US');
+  $('br-greet').textContent=g+', '+nm+'.';
+  $('br-mon').textContent=now.toLocaleDateString('en-MY',{month:'long',year:'numeric'})+' · so far';
+  $('br-cards').innerHTML=
+    `<div class="br-card"><div class="br-lbl">Invoices this month</div><div class="br-val">RM ${fmt(ts)}</div><div class="br-sub">${sa.length} invoice${sa.length===1?'':'s'} · avg RM ${fmt(avg)}</div></div>`+
+    `<div class="br-card"><div class="br-lbl">Purchases this month</div><div class="br-val">RM ${fmt(tp)}</div><div class="br-sub">${pu.length} purchase${pu.length===1?'':'s'}</div></div>`+
+    `<div class="br-card"><div class="br-lbl">Expenses this month</div><div class="br-val">RM ${fmt(te)}</div><div class="br-sub">${ex.length} expense${ex.length===1?'':'s'}</div></div>`;
+  _briefTxt=`${g}, ${nm}. Here is your briefing for ${now.toLocaleDateString('en-GB',{month:'long'})}. `+
+    `Invoices: ${sa.length} so far, totalling ${rd(ts)} ringgit, averaging ${rd(avg)} ringgit each. `+
+    `Purchases: ${pu.length} entries, totalling ${rd(tp)} ringgit. `+
+    `Expenses this month: ${rd(te)} ringgit.`;
+  $('br-show').checked=briefOn();paintVoiceBtn();
+  const b=$('brief');b.style.display='flex';requestAnimationFrame(()=>requestAnimationFrame(()=>b.classList.add('on')));
+  // browsers only allow speech after the person has interacted with the page (e.g. after tapping Sign In)
+  const canAuto=navigator.userActivation?navigator.userActivation.hasBeenActive:true;
+  if(voiceOn()&&canAuto)setTimeout(speakBrief,450);
+}
+function closeBrief(){
+  try{speechSynthesis.cancel();}catch(e){}
+  const b=$('brief');b.classList.remove('on','speaking');setTimeout(()=>{b.style.display='none';},350);
+}
+function maybeBrief(){if(_briefPending){_briefPending=false;if(briefOn())showBrief();}}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('brief')&&$('brief').style.display==='flex')closeBrief();});
+function bootShow(){
+  const b=$('boot');if(!b)return;
+  b.classList.remove('out');b.style.display='flex';_bootT=Date.now();
+  let pct=0;$('boot-bar').style.width='0';$('boot-pct').textContent='0%';$('boot-line').textContent=BOOT_LINES[0]+'...';
+  clearInterval(_bootI);
+  _bootI=setInterval(()=>{pct=Math.min(92,pct+Math.random()*9+3);$('boot-bar').style.width=pct+'%';$('boot-pct').textContent=Math.floor(pct)+'%';$('boot-line').textContent=BOOT_LINES[Math.min(BOOT_LINES.length-1,Math.floor(pct/16))]+'...';},260);
+  clearTimeout(_bootF);_bootF=setTimeout(()=>bootHide(),12000); // failsafe: never trap the user
+}
+function bootHide(msg){
+  const b=$('boot');if(!b||b.style.display==='none')return;
+  clearInterval(_bootI);clearTimeout(_bootF);
+  $('boot-bar').style.width='100%';$('boot-pct').textContent='100%';$('boot-line').textContent=msg||'Access granted';
+  const wait=Math.max(0,1500-(Date.now()-_bootT));
+  setTimeout(()=>{b.classList.add('out');setTimeout(()=>{b.style.display='none';maybeBrief();},520);},wait+300);
+}
 async function boot(){
-  sb=supabase.createClient(SURL,SKEY);
-  const{data:{session}}=await sb.auth.getSession();
-  if(!session){$('auth').style.display='flex';return;}
-  S.user=session.user;loadCfg();loadLog();await loadAll();
-  $('tb-dt').textContent=new Date().toLocaleDateString('en-MY',{weekday:'short',day:'numeric',month:'short'});
-  S.dFrom=fom();S.dTo=today();rDash();
+  bootShow();
+  try{
+    sb=supabase.createClient(SURL,SKEY);
+    const{data:{session}}=await sb.auth.getSession();
+    if(!session){$('auth').style.display='flex';bootHide('Awaiting login');return;}
+    S.user=session.user;loadCfg();loadLog();await loadAll();
+    $('tb-dt').textContent=new Date().toLocaleDateString('en-MY',{weekday:'short',day:'numeric',month:'short'});
+    S.dFrom=fom();S.dTo=today();rDash();
+    _briefPending=true;bootHide();
+  }catch(e){console.error(e);$('auth').style.display='flex';bootHide('Offline');}
 }
 async function doSignIn(){
   const btn=$('a-btn'),e=$('a-em').value.trim(),p=$('a-pw').value;
@@ -1155,7 +1373,7 @@ async function doSignIn(){
   btn.disabled=true;btn.innerHTML='<span class="spin"></span> Signing in...';
   const{error}=await sb.auth.signInWithPassword({email:e,password:p});
   if(error){$('a-err').textContent=error.message;$('a-err').style.display='block';btn.disabled=false;btn.innerHTML='Sign In';}
-  else{const{data:{session}}=await sb.auth.getSession();S.user=session.user;$('auth').style.display='none';loadCfg();loadLog();await loadAll();S.dFrom=fom();S.dTo=today();rDash();}
+  else{bootShow();const{data:{session}}=await sb.auth.getSession();S.user=session.user;$('auth').style.display='none';loadCfg();loadLog();await loadAll();S.dFrom=fom();S.dTo=today();rDash();_briefPending=true;bootHide();}
 }
 async function doSignUp(){
   const btn=$('a-ubtn'),e=$('a-uem').value.trim(),p=$('a-upw').value,p2=$('a-upw2').value;
