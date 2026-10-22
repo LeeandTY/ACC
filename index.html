@@ -288,6 +288,44 @@ img,canvas{max-width:100%}
   #topbar{height:calc(46px + env(safe-area-inset-top))}
 }
 
+/* ---- Jarvis neon sign-in (green) ---- */
+#auth{--nn:#39ff88;--nn2:#00e676;--nd:rgba(57,255,136,.35);background:#040807;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#auth::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(ellipse 60% 50% at 50% 40%,rgba(57,255,136,.16),transparent 70%),
+  linear-gradient(rgba(57,255,136,.07) 1px,transparent 1px) 0 0/44px 44px,
+  linear-gradient(90deg,rgba(57,255,136,.07) 1px,transparent 1px) 0 0/44px 44px;
+  -webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 45%,#000 30%,transparent 100%);mask-image:radial-gradient(ellipse 80% 70% at 50% 45%,#000 30%,transparent 100%)}
+#auth::after{content:"";position:absolute;left:0;right:0;height:120px;top:-120px;background:linear-gradient(transparent,rgba(57,255,136,.10),transparent);animation:authscan 6s linear infinite;pointer-events:none}
+@keyframes authscan{to{transform:translateY(calc(100vh + 240px))}}
+#auth-box{position:relative;z-index:1;background:rgba(6,16,11,.82);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--nd);border-radius:18px;padding:30px 24px 24px;max-width:380px;box-shadow:0 0 0 1px rgba(57,255,136,.08),0 0 40px rgba(57,255,136,.18),inset 0 0 30px rgba(57,255,136,.05)}
+#auth-box::before,#auth-box::after{content:"";position:absolute;width:22px;height:22px;border:2px solid var(--nn);filter:drop-shadow(0 0 5px var(--nn))}
+#auth-box::before{top:-2px;left:-2px;border-right:0;border-bottom:0;border-top-left-radius:18px}
+#auth-box::after{bottom:-2px;right:-2px;border-left:0;border-top:0;border-bottom-right-radius:18px}
+#auth-box .logo-wrap{position:relative;width:96px;height:96px;margin:0 auto 16px;display:flex;align-items:center;justify-content:center}
+#auth-box .ring{position:absolute;inset:0;border-radius:50%;border:1.5px dashed rgba(57,255,136,.55);animation:authspin 14s linear infinite}
+#auth-box .ring.r2{inset:7px;border:1.5px solid transparent;border-top-color:var(--nn);border-bottom-color:var(--nn);animation-duration:5s;animation-direction:reverse;filter:drop-shadow(0 0 4px var(--nn))}
+@keyframes authspin{to{transform:rotate(360deg)}}
+#auth-box .logo{width:62px;height:62px;margin:0;border-radius:16px;background:#06130d;border:2.5px solid var(--nn);color:var(--nn);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:19px;font-weight:900;letter-spacing:-.5px;text-shadow:0 0 10px var(--nn),0 0 22px rgba(57,255,136,.6);box-shadow:0 0 14px rgba(57,255,136,.55),inset 0 0 14px rgba(57,255,136,.25);animation:authpulse 2.8s ease-in-out infinite}
+@keyframes authpulse{50%{box-shadow:0 0 24px rgba(57,255,136,.85),inset 0 0 18px rgba(57,255,136,.4)}}
+#auth-box h2{text-align:center;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:19px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#eafff2;text-shadow:0 0 12px rgba(57,255,136,.45);margin-bottom:6px}
+#auth-box p.sub{text-align:center;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--nn);opacity:.85;margin-bottom:6px}
+#auth-box p.sub i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--nn);box-shadow:0 0 8px var(--nn);margin-right:6px;vertical-align:1px;animation:authblink 1.4s ease-in-out infinite}
+@keyframes authblink{50%{opacity:.25}}
+#auth-box p.loc{text-align:center;font-size:11px;color:rgba(200,255,220,.5);letter-spacing:1px;margin-bottom:20px}
+#auth .auth-tabs{background:rgba(57,255,136,.06);border:1px solid rgba(57,255,136,.18)}
+#auth .auth-tab{color:rgba(200,255,220,.55);font-family:inherit;font-size:12px;letter-spacing:1.5px;text-transform:uppercase}
+#auth .auth-tab.on{background:rgba(57,255,136,.14);color:var(--nn);box-shadow:inset 0 0 0 1px var(--nd),0 0 12px rgba(57,255,136,.25)}
+#auth .lbl{color:rgba(57,255,136,.8);font-size:10.5px;letter-spacing:2px;text-transform:uppercase}
+#auth .inp{background:rgba(2,10,6,.85);border:1px solid rgba(57,255,136,.28);color:#eafff2;font-family:inherit;border-radius:10px}
+#auth .inp::placeholder{color:rgba(200,255,220,.28)}
+#auth .inp:focus{border-color:var(--nn);box-shadow:0 0 0 3px rgba(57,255,136,.14),0 0 16px rgba(57,255,136,.3)}
+#auth .btn-pr{background:linear-gradient(135deg,var(--nn),var(--nn2));border:0;color:#03140a;font-family:inherit;font-weight:800;letter-spacing:2px;text-transform:uppercase;box-shadow:0 0 18px rgba(57,255,136,.5);transition:box-shadow .2s,transform .1s}
+#auth .btn-pr:hover{box-shadow:0 0 30px rgba(57,255,136,.85);background:linear-gradient(135deg,var(--nn),var(--nn2))}
+#auth .btn-pr:active{transform:scale(.98)}
+#auth #a-err{color:#ff6b6b!important;text-shadow:0 0 8px rgba(255,80,80,.4)}
+#auth #a-ok{color:var(--nn)!important}
+#auth .foot{text-align:center;font-size:10px;letter-spacing:2px;color:rgba(200,255,220,.3);margin-top:18px;text-transform:uppercase}
+
 /* ---- Respect reduced motion ---- */
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -295,9 +333,10 @@ img,canvas{max-width:100%}
 <body>
 <div id="auth" style="display:none">
   <div id="auth-box">
-    <div class="logo"><i class="fa-solid fa-leaf"></i></div>
+    <div class="logo-wrap"><span class="ring"></span><span class="ring r2"></span><div class="logo">L&amp;TY</div></div>
     <h2>Lee &amp; TY Trading</h2>
-    <p>Pasar Pudu, Kuala Lumpur</p>
+    <p class="sub"><i></i>InvoiceOS · Secure Access</p>
+    <p class="loc">Pasar Pudu, Kuala Lumpur</p>
     <div class="auth-tabs">
       <button class="auth-tab on" onclick="authTab('in',this)">Sign In</button>
       <button class="auth-tab" onclick="authTab('up',this)">Sign Up</button>
@@ -315,6 +354,7 @@ img,canvas{max-width:100%}
     </div>
     <p id="a-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none"></p>
     <p id="a-ok" style="color:var(--grn);font-size:12px;margin-top:10px;display:none"></p>
+    <div class="foot">System online · Encrypted</div>
   </div>
 </div>
 
