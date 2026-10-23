@@ -474,6 +474,99 @@ html:not([data-theme="dark"]) #jv-sweep,html:not([data-theme="dark"]) .fx-ping{d
 #brief .br-chk{display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12px;color:rgba(200,255,220,.7);cursor:pointer;user-select:none}
 #brief .br-chk input{width:17px;height:17px;accent-color:#39ff88;flex:0 0 auto}
 
+/* ===== SOLO LEVELING "SYSTEM" STYLE (dark theme only; same colours + fonts) ===== */
+@keyframes slOpen{
+  0%{opacity:0;clip-path:inset(calc(50% - 1px) 50% calc(50% - 1px) 50%)}
+  8%{opacity:1}
+  38%{opacity:1;clip-path:inset(calc(50% - 1px) -24px calc(50% - 1px) -24px)}
+  100%{opacity:1;clip-path:inset(-24px -24px -24px -24px)}
+}
+@keyframes slClose{
+  0%{opacity:1;clip-path:inset(0 0 0 0)}
+  55%{opacity:1;clip-path:inset(calc(50% - 1px) 0 calc(50% - 1px) 0)}
+  100%{opacity:0;clip-path:inset(calc(50% - 1px) 50% calc(50% - 1px) 50%)}
+}
+@keyframes slLine{0%{opacity:1;transform:scaleX(0)}45%{opacity:1;transform:scaleX(1)}100%{opacity:0;transform:scaleX(1)}}
+@keyframes slFlick{0%{opacity:.15}12%{opacity:1}26%{opacity:.35}40%{opacity:1}55%{opacity:.7}70%{opacity:1}100%{opacity:1}}
+@keyframes slGlitch{
+  0%,93%,100%{text-shadow:0 0 10px rgba(57,255,136,.55);transform:none}
+  94%{text-shadow:2px 0 rgba(57,255,136,.9),-2px 0 rgba(255,255,255,.55);transform:translateX(-1px)}
+  96%{text-shadow:-2px 0 rgba(57,255,136,.9),2px 0 rgba(255,255,255,.55);transform:translateX(1px)}
+  98%{text-shadow:1px 0 rgba(57,255,136,.9),-1px 0 rgba(255,255,255,.4);transform:none}
+}
+@keyframes slPulse{50%{box-shadow:inset 0 0 0 3px rgba(2,8,5,.92),inset 0 0 0 4px rgba(57,255,136,.5),0 0 30px rgba(57,255,136,.28)}}
+
+[data-theme="dark"]{--r:3px;--rs:3px;--rx:2px}
+/* windows: sharp, double-line frame, corner brackets, glowing title bar */
+[data-theme="dark"] .card,[data-theme="dark"] .mc{position:relative;border-radius:2px;border:1px solid rgba(57,255,136,.5);
+  background:linear-gradient(180deg,rgba(57,255,136,.06),rgba(5,14,9,.93) 42%);
+  box-shadow:inset 0 0 0 3px rgba(2,8,5,.92),inset 0 0 0 4px rgba(57,255,136,.22),0 0 22px rgba(57,255,136,.12)}
+[data-theme="dark"] .card::after,[data-theme="dark"] .mc::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:
+   linear-gradient(#39ff88,#39ff88) top left/14px 2px no-repeat,linear-gradient(#39ff88,#39ff88) top left/2px 14px no-repeat,
+   linear-gradient(#39ff88,#39ff88) top right/14px 2px no-repeat,linear-gradient(#39ff88,#39ff88) top right/2px 14px no-repeat,
+   linear-gradient(#39ff88,#39ff88) bottom left/14px 2px no-repeat,linear-gradient(#39ff88,#39ff88) bottom left/2px 14px no-repeat,
+   linear-gradient(#39ff88,#39ff88) bottom right/14px 2px no-repeat,linear-gradient(#39ff88,#39ff88) bottom right/2px 14px no-repeat;
+  filter:drop-shadow(0 0 3px #39ff88)}
+[data-theme="dark"] .mc::before{display:none}
+[data-theme="dark"] .card-hd{position:relative;background:linear-gradient(90deg,rgba(57,255,136,.18),rgba(57,255,136,.02) 75%);border-bottom:1px solid rgba(57,255,136,.4)}
+[data-theme="dark"] .card-hd::before{content:"";position:absolute;left:0;top:0;width:44px;height:2px;background:#39ff88;box-shadow:0 0 10px #39ff88}
+[data-theme="dark"] .card-ti{letter-spacing:.6px}
+/* window summon: line -> expands sideways -> opens vertically */
+[data-theme="dark"] .page.on .card,[data-theme="dark"] .page.on .mc{animation:slOpen .6s cubic-bezier(.2,.7,.2,1) backwards}
+[data-theme="dark"] .page.on .card:nth-child(2),[data-theme="dark"] .page.on .mc:nth-child(2){animation-delay:.07s}
+[data-theme="dark"] .page.on .card:nth-child(3),[data-theme="dark"] .page.on .mc:nth-child(3){animation-delay:.14s}
+[data-theme="dark"] .page.on .card:nth-child(4),[data-theme="dark"] .page.on .mc:nth-child(4){animation-delay:.21s}
+[data-theme="dark"] .page.on .card:nth-child(5),[data-theme="dark"] .page.on .mc:nth-child(5){animation-delay:.28s}
+[data-theme="dark"] .page.on .card:nth-child(6),[data-theme="dark"] .page.on .mc:nth-child(6){animation-delay:.35s}
+[data-theme="dark"] .page.on .card:nth-child(n+7),[data-theme="dark"] .page.on .mc:nth-child(n+7){animation-delay:.42s}
+[data-theme="dark"] #s-add,[data-theme="dark"] #s-hist,[data-theme="dark"] #p-add,[data-theme="dark"] #p-hist,[data-theme="dark"] #p-exp,[data-theme="dark"] #p-dft,[data-theme="dark"] #exp-add,[data-theme="dark"] #exp-hist{animation:slOpen .45s cubic-bezier(.2,.7,.2,1) backwards}
+/* page change: a light line flashes across the middle of the screen */
+#jv-sweep{top:50%;transform-origin:center;transform:scaleX(0)}
+#jv-sweep::before{display:none}
+#jv-sweep.go{animation:slLine .6s ease-out}
+/* modals, toast, buttons, pills */
+[data-theme="dark"] #mb{border-radius:4px 4px 0 0;animation:slOpen .55s cubic-bezier(.2,.7,.2,1);box-shadow:inset 0 0 0 3px rgba(2,8,5,.92),inset 0 0 0 4px rgba(57,255,136,.22),0 0 40px rgba(57,255,136,.25)}
+@media(min-width:600px){[data-theme="dark"] #mb{border-radius:3px}}
+[data-theme="dark"] #toast{border-radius:3px;box-shadow:inset 0 0 0 2px rgba(2,8,5,.9),inset 0 0 0 3px rgba(57,255,136,.3),0 0 18px rgba(57,255,136,.4)}
+[data-theme="dark"] #toast::before{content:"[SYSTEM]  ";opacity:.6;font-weight:600;letter-spacing:1px;font-size:11px}
+[data-theme="dark"] #toast.on{animation:slOpen .4s cubic-bezier(.2,.7,.2,1)}
+[data-theme="dark"] .rpill,[data-theme="dark"] .bdg{border-radius:2px}
+[data-theme="dark"] #nav-tgl{border-radius:3px}
+[data-theme="dark"] .btn-pr:active,[data-theme="dark"] .btn-gn:active{filter:brightness(1.3)}
+.fx-ping{border-radius:0;border-width:1px}
+/* sidebar: diamond marker + flicker when selected */
+[data-theme="dark"] .nb.on{animation:slFlick .5s steps(1,end)}
+[data-theme="dark"] .nb.on::after{content:"";position:absolute;right:4px;top:50%;width:6px;height:6px;border:1px solid #39ff88;transform:translateY(-50%) rotate(45deg);box-shadow:0 0 6px #39ff88}
+[data-theme="dark"] .tab.on{animation:slFlick .45s steps(1,end)}
+/* heading glitch every few seconds */
+[data-theme="dark"] .tb-lo h1{animation:slGlitch 7s infinite}
+/* boot: opens like a System window, closes back into a line */
+#boot{animation:slOpen .75s cubic-bezier(.2,.7,.2,1)}
+#boot.out{opacity:1;transform:none;animation:slClose .5s ease-in forwards}
+/* sign-in: items summoned one by one */
+#auth.pre #auth-box>*{opacity:0}
+#auth.play #auth-box>*{animation:slOpen .55s cubic-bezier(.2,.7,.2,1) backwards}
+#auth.play #auth-box>.logo-wrap{animation-delay:.05s}
+#auth.play #auth-box>h2{animation-delay:.18s}
+#auth.play #auth-box>p.sub{animation-delay:.26s}
+#auth.play #auth-box>p.loc{animation-delay:.32s}
+#auth.play #auth-box>.auth-tabs{animation-delay:.4s}
+#auth.play #auth-box>#auth-in,#auth.play #auth-box>#auth-up{animation-delay:.5s}
+#auth.play #auth-box>.foot{animation-delay:.62s}
+#auth-in,#auth-up{animation:slOpen .4s cubic-bezier(.2,.7,.2,1)}
+/* briefing: window frame + staggered cards */
+#brief .br-box{border-radius:2px;box-shadow:inset 0 0 0 3px rgba(2,8,5,.92),inset 0 0 0 4px rgba(57,255,136,.25),0 0 40px rgba(57,255,136,.25);transition:none;transform:none}
+#brief .br-box::before{border-top-left-radius:0}
+#brief .br-box::after{border-bottom-right-radius:0}
+#brief.on .br-box{animation:slOpen .65s cubic-bezier(.2,.7,.2,1),slPulse 3.2s ease-in-out 1s infinite}
+#brief .br-card,#brief .br-b,#brief .br-go{border-radius:2px}
+#brief.on .br-card{animation:slOpen .55s cubic-bezier(.2,.7,.2,1) backwards}
+#brief.on .br-card:nth-child(1){animation-delay:.35s}
+#brief.on .br-card:nth-child(2){animation-delay:.5s}
+#brief.on .br-card:nth-child(3){animation-delay:.65s}
+#brief.on .br-row,#brief.on .br-go,#brief.on .br-chk{animation:slOpen .5s cubic-bezier(.2,.7,.2,1) .8s backwards}
+
 /* ---- Respect reduced motion ---- */
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -487,7 +580,7 @@ html:not([data-theme="dark"]) #jv-sweep,html:not([data-theme="dark"]) .fx-ping{d
   <div class="b-barwrap"><div class="b-bar" id="boot-bar"></div></div>
   <div class="b-meta"><span class="b-line" id="boot-line">Starting up...</span><span class="b-pct" id="boot-pct">0%</span></div>
 </div>
-<div id="auth" style="display:none">
+<div id="auth" class="pre" style="display:none">
   <div id="auth-box">
     <div class="logo-wrap"><span class="ring"></span><span class="ring r2"></span><div class="logo">L&amp;TY</div></div>
     <h2>Lee &amp; TY Trading</h2>
@@ -1378,6 +1471,12 @@ function closeBrief(){
   try{speechSynthesis.cancel();}catch(e){}
   const b=$('brief');b.classList.remove('on','speaking');setTimeout(()=>{b.style.display='none';},350);
 }
+/* Sign-in items are hidden (class "pre") until the boot screen closes, then summoned one by one */
+function playAuth(){
+  const a=$('auth');if(!a)return;
+  a.classList.remove('pre');a.classList.add('play');
+  setTimeout(()=>a.classList.remove('play'),1600);
+}
 /* Jarvis motion helpers */
 const _reduce=()=>window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches;
 function jvSweep(){if(_reduce())return;const s=$('jv-sweep');if(!s)return;s.classList.remove('go');void s.offsetWidth;s.classList.add('go');}
@@ -1415,7 +1514,7 @@ function bootHide(msg){
   clearInterval(_bootI);clearTimeout(_bootF);
   $('boot-bar').style.width='100%';$('boot-pct').textContent='100%';$('boot-line').textContent=msg||'Access granted';
   const wait=Math.max(0,1500-(Date.now()-_bootT));
-  setTimeout(()=>{b.classList.add('out');setTimeout(()=>{b.style.display='none';maybeBrief();},520);},wait+300);
+  setTimeout(()=>{b.classList.add('out');setTimeout(playAuth,260);setTimeout(()=>{b.style.display='none';maybeBrief();},520);},wait+300);
 }
 async function boot(){
   bootShow();
