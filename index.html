@@ -574,12 +574,44 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
 [data-theme="dark"] #toast.err{box-shadow:inset 0 0 0 3px rgba(22,10,12,.9),inset 0 0 0 4px rgba(255,92,108,.35),0 0 40px rgba(255,92,108,.45)}
 #brief .br-tag{letter-spacing:1px}
 
+/* ---- Centred "SCANNING" System notification (receipt / invoice scans) ---- */
+@keyframes sfScan{from{top:6px}to{top:calc(100% - 9px)}}
+@keyframes sfDot{0%,20%{opacity:.15}50%{opacity:1}100%{opacity:.15}}
+@keyframes sfGlow{50%{box-shadow:inset 0 0 0 3px rgba(2,8,5,.92),inset 0 0 0 4px rgba(57,255,136,.55),0 0 60px rgba(57,255,136,.5)}}
+#scanfx{position:fixed;inset:0;z-index:650;display:none;align-items:center;justify-content:center;pointer-events:none;background:rgba(2,6,4,.6);padding:16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#scanfx.on{display:flex}
+#scanfx .sf-box{position:relative;text-align:center;min-width:260px;max-width:min(92vw,520px);padding:28px 40px 26px;background:#06110b;border:1px solid rgba(57,255,136,.55);border-radius:3px;
+  box-shadow:inset 0 0 0 3px rgba(2,8,5,.92),inset 0 0 0 4px rgba(57,255,136,.3),0 0 44px rgba(57,255,136,.4);animation:slOpen .5s cubic-bezier(.2,.7,.2,1),sfGlow 2.4s ease-in-out .6s infinite}
+#scanfx .sf-box::before,#scanfx .sf-box::after{content:"";position:absolute;width:20px;height:20px;border:2px solid #39ff88;filter:drop-shadow(0 0 4px #39ff88)}
+#scanfx .sf-box::before{top:-2px;left:-2px;border-right:0;border-bottom:0}
+#scanfx .sf-box::after{bottom:-2px;right:-2px;border-left:0;border-top:0}
+#scanfx .sf-tag{font-size:20px;letter-spacing:1px;color:rgba(57,255,136,.7);margin-bottom:14px}
+#scanfx .sf-doc{position:relative;width:84px;height:104px;margin:0 auto 18px;border:2px solid #39ff88;border-radius:3px;
+  background:repeating-linear-gradient(transparent 0 11px,rgba(57,255,136,.3) 11px 12px) 10px 14px/calc(100% - 20px) calc(100% - 28px) no-repeat;
+  box-shadow:0 0 18px rgba(57,255,136,.5),inset 0 0 14px rgba(57,255,136,.2)}
+#scanfx .sf-doc i{position:absolute;left:-12px;right:-12px;height:3px;top:6px;background:#39ff88;box-shadow:0 0 14px 3px rgba(57,255,136,.8);animation:sfScan 1.3s ease-in-out infinite alternate}
+#scanfx .sf-t{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:26px;font-weight:800;line-height:1.2;letter-spacing:4px;color:#eafff2;text-transform:uppercase;text-shadow:0 0 14px rgba(57,255,136,.6)}
+#scanfx .sf-t b{font-weight:800;animation:sfDot 1.2s infinite}
+#scanfx .sf-t b:nth-child(2){animation-delay:.2s}
+#scanfx .sf-t b:nth-child(3){animation-delay:.4s}
+#scanfx .sf-s{margin-top:10px;font-size:14px;letter-spacing:.5px;color:rgba(200,255,220,.75)}
+#scanfx .sf-bar{display:none;margin-top:14px;height:6px;border:1px solid rgba(57,255,136,.4);background:rgba(57,255,136,.08);overflow:hidden}
+#scanfx .sf-bar.on{display:block}
+#scanfx .sf-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#00e676,#39ff88);box-shadow:0 0 10px #39ff88;transition:width .3s ease}
+
 /* ---- Respect reduced motion ---- */
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div id="jv-sweep"></div>
+<div id="scanfx" aria-live="polite"><div class="sf-box">
+  <div class="sf-tag">[SYSTEM]</div>
+  <div class="sf-doc"><i></i></div>
+  <div class="sf-t">Scanning<b>.</b><b>.</b><b>.</b></div>
+  <div class="sf-s" id="sf-sub"></div>
+  <div class="sf-bar" id="sf-bar"><i id="sf-fill"></i></div>
+</div></div>
 <div id="boot">
   <div class="b-core"><span class="b-ring b-r1"></span><span class="b-ring b-r2"></span><span class="b-ring b-r3"></span><span class="b-ring b-r4"></span><div class="b-logo">L&amp;TY</div></div>
   <div class="b-title">Lee &amp; TY Trading</div>
@@ -1348,7 +1380,7 @@ function mName(it,field){
 const sumAmt=arr=>arr.reduce((t,r)=>t+Number(r.amount||0),0);
 
 let _tt;
-function toast(m,t=''){const el=$('toast');el.textContent=m;el.className='on'+(t?' '+t:'');clearTimeout(_tt);_tt=setTimeout(()=>el.className='',2800);}
+function toast(m,t=''){const el=$('toast');el.textContent=m;el.className='on'+(t?' '+t:'');clearTimeout(_tt);_tt=setTimeout(()=>el.className='',1500);}
 function openM(h){$('mc').innerHTML=h;$('ov').classList.add('on');document.body.style.overflow='hidden';}
 function closeM(){$('ov').classList.remove('on');document.body.style.overflow='';S.eI=S.ePr=null;}
 function clov(e){if(e.target===$('ov'))closeM();}
@@ -1478,6 +1510,11 @@ function closeBrief(){
   try{speechSynthesis.cancel();}catch(e){}
   const b=$('brief');b.classList.remove('on','speaking');setTimeout(()=>{b.style.display='none';},350);
 }
+/* Centred SCANNING notification: counted so overlapping scans never hide it too early */
+let _sfN=0;
+function scanFxStart(sub){_sfN++;const el=$('scanfx');if(!el)return;$('sf-sub').textContent=sub||'';$('sf-bar').classList.remove('on');el.classList.add('on');}
+function scanFxSet(sub,pct){const el=$('scanfx');if(!el)return;if(sub!=null)$('sf-sub').textContent=sub;if(typeof pct==='number'){$('sf-bar').classList.add('on');$('sf-fill').style.width=Math.max(0,Math.min(100,pct))+'%';}}
+function scanFxStop(){_sfN=Math.max(0,_sfN-1);if(_sfN===0){const el=$('scanfx');if(el)el.classList.remove('on');}}
 /* Sign-in items are hidden (class "pre") until the boot screen closes, then summoned one by one */
 function playAuth(){
   const a=$('auth');if(!a)return;
@@ -3133,6 +3170,7 @@ async function onScanImage(input){
   const prompt=_scanMode==='s'
     ?'This is a handwritten sales invoice from a fresh produce wholesaler in Malaysia. It may contain a mix of English and Malay item names (e.g. Kangkung, Tauge, Halia, Daun Bawang). Extract ALL items sold. Return ONLY a raw JSON array, no markdown, no backticks, no explanations. Format: [{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]. Rules: qty is the quantity number; unit is the unit written (kg, pcs, pkt, ctn, box, nos etc) or empty string; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Keep the item names as written, correcting only obvious spelling.'
     :'This is a purchase receipt from a supplier in Malaysia. Extract the SUPPLIER/SHOP NAME and ALL items purchased. Return ONLY a raw JSON object, no markdown, no backticks, no explanations. Format: {"supplier":"Shop Name","items":[{"name":"Item Name","qty":2,"unit":"kg","price":10.50}]}. Rules for supplier: use the business/shop/trading name printed at the top of the receipt (e.g. "Boon Yee", "33 Noodles & Sprouts", "NSK"). Ignore addresses, phone numbers, registration numbers and words like RECEIPT, INVOICE, BILL, TAX INVOICE. If the receipt shows no business name at all (a plain handwritten cash slip), return "" for supplier. Rules for items: qty is the quantity number; unit is the unit shown (kg, pcs, pkt, ctn, box, nos etc) or empty string if none; price is the UNIT price (price per 1 unit), not the line total. If only line total is shown, divide by qty. Use the item names exactly as written on the receipt.';
+  scanFxStart(_scanMode==='s'?'Reading handwritten invoice':'Reading receipt');
   try{
     // Try current models in order — Google retires old models periodically
     const models=['gemini-3.6-flash','gemini-3.5-flash','gemini-2.5-flash'];
@@ -3188,6 +3226,7 @@ async function onScanImage(input){
     toast('Scan failed: '+e.message,'err');
   }finally{
     $('scan-status').style.display='none';
+    scanFxStop();
     input.value='';
   }
 }
@@ -3385,7 +3424,9 @@ async function onBatchFiles(input){
   }
   $('batch-step1').style.display='none';$('batch-step2').style.display='block';
   renderBatchQueue();
-  await processBatchRange(startIdx,_batchQueue.length);
+  scanFxStart('Reading receipts');
+  try{await processBatchRange(startIdx,_batchQueue.length);}
+  finally{scanFxStop();}
   $('batch-progress').style.display='none';
   input.value='';
 }
@@ -3395,6 +3436,7 @@ async function processBatchRange(start,end){
   const total=end-start;
   let done=0,next=start;
   $('batch-progress-txt').textContent=`Reading receipts... (0 of ${total})`;
+  scanFxSet(`Receipt 0 of ${total}`,0);
   async function worker(){
     while(next<end){
       const i=next++;
@@ -3411,6 +3453,7 @@ async function processBatchRange(start,end){
       }
       done++;
       $('batch-progress-txt').textContent=`Reading receipts... (${done} of ${total})`;
+      scanFxSet(`Receipt ${done} of ${total}`,done/total*100);
       renderBatchQueue();
     }
   }
@@ -3471,6 +3514,7 @@ async function retryBatchItem(qi){
   const apiKey=($('batch-key').value||localStorage.getItem('lty_gemini_key')||'').trim();
   if(!apiKey){toast('Enter your Google AI key first','err');return;}
   item.status='pending';item.error='';renderBatchQueue();
+  scanFxStart('Reading receipt');
   try{
     const{supplier,rows}=await scanOnePurchaseImage(item.file,apiKey);
     item.rows=rows;
@@ -3479,6 +3523,7 @@ async function retryBatchItem(qi){
     item.supplier=resolved;item.supNew=isNew;
     item.status='ok';
   }catch(e){item.status='err';item.error=e.message;}
+  finally{scanFxStop();}
   renderBatchQueue();
 }
 async function saveAllBatch(){
