@@ -1596,22 +1596,35 @@ async function doSignOut(){if(!confirm('Sign out?'))return;await sb.auth.signOut
 function loadCfg(){try{const s=localStorage.getItem('lty_cfg');if(s)Object.assign(S.cfg,JSON.parse(s));}catch(e){}if(!S.cfg.expCats?.length)S.cfg.expCats=[...ECATS];}
 function saveCfg(){localStorage.setItem('lty_cfg',JSON.stringify(S.cfg));toast('Saved','ok');}
 
+// Supabase returns at most 1000 rows per request. Page through so big tables (sale_items, purchase_items…) load fully.
+async function fetchAll(table,sel,orders){
+  const out=[];
+  for(let from=0;;from+=1000){
+    let q=sb.from(table).select(sel);
+    (orders||[]).forEach(o=>{q=q.order(o[0],{ascending:o[1]!==false});});
+    const{data,error}=await q.range(from,from+999);
+    if(error)return{data:out,error};
+    out.push(...(data||[]));
+    if(!data||data.length<1000)break;
+  }
+  return{data:out};
+}
 async function loadAll(){
   const uid=S.user.id;
   const[cu,su,cl,sa,si,pu,pi,iv,pa,pr,ex,dr,al,pall,rm,ov]=await Promise.all([
     sb.from('market_customers').select('*').order('name'),
     sb.from('suppliers').select('*').order('name'),
     sb.from('clients').select('*').order('name'),
-    sb.from('daily_sales').select('*').order('entry_date',{ascending:false}),
-    sb.from('sale_items').select('*').order('sort_order'),
-    sb.from('daily_purchases').select('*').order('entry_date',{ascending:false}),
-    sb.from('purchase_items').select('*').order('sort_order'),
-    sb.from('invoices').select('*,client:clients(id,name,email,address),items:invoice_items(*)').order('issue_date',{ascending:false}),
-    sb.from('invoice_payments').select('*').order('payment_date'),
+    fetchAll('daily_sales','*',[['entry_date',false],['id']]),
+    fetchAll('sale_items','*',[['sort_order'],['id']]),
+    fetchAll('daily_purchases','*',[['entry_date',false],['id']]),
+    fetchAll('purchase_items','*',[['sort_order'],['id']]),
+    fetchAll('invoices','*,client:clients(id,name,email,address),items:invoice_items(*)',[['issue_date',false],['id']]),
+    fetchAll('invoice_payments','*',[['payment_date'],['id']]),
     sb.from('prices').select('*').eq('active',true).order('name'),
-    sb.from('expenses').select('*').order('entry_date',{ascending:false}),
+    fetchAll('expenses','*',[['entry_date',false],['id']]),
     sb.from('purchase_drafts').select('*').order('created_at'),
-    sb.from('product_aliases').select('*'),
+    fetchAll('product_aliases','*',[['id']]),
     sb.from('prices').select('id,name,unit,category,code,active'),
     sb.from('recon_marks').select('*'),
     sb.from('customer_price_overrides').select('*'),
