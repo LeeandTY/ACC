@@ -599,6 +599,7 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
 #scanfx .sf-bar.on{display:block}
 #scanfx .sf-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#00e676,#39ff88);box-shadow:0 0 10px #39ff88;transition:width .3s ease}
 
+#pay-run,#pay-emp,#pay-hist{animation:slOpen .35s ease both}
 /* ---- Respect reduced motion ---- */
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -684,6 +685,7 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
   <button class="nb" onclick="gp('inv',this)"><i class="fa-solid fa-file-invoice"></i><span>Invoices</span></button>
   <button class="nb" onclick="gp('prices',this)"><i class="fa-solid fa-tags"></i><span>Prices</span></button>
   <button class="nb" onclick="gp('rep',this)"><i class="fa-solid fa-chart-bar"></i><span>Reports</span></button>
+  <button class="nb" onclick="gp('pay',this)"><i class="fa-solid fa-money-check-dollar"></i><span>Payroll</span></button>
 </nav>
 
 <!-- DASHBOARD -->
@@ -895,6 +897,17 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
     </div>
   </div></div>
   <div id="rp-bd"></div>
+</div>
+
+<!-- PAYROLL -->
+<div id="page-pay" class="page">
+  <div id="pay-msg"></div>
+  <div id="pay-run"></div><div id="pay-emp" style="display:none"></div><div id="pay-hist" style="display:none"></div>
+  <div class="tabs">
+    <button class="tab on" onclick="paytab('run',this)"><i class="fa-solid fa-money-check-dollar"></i> Run payroll</button>
+    <button class="tab" onclick="paytab('emp',this)"><i class="fa-solid fa-users"></i> Employees</button>
+    <button class="tab" onclick="paytab('hist',this)"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+  </div>
 </div>
 
 <!-- SETTINGS -->
@@ -1684,7 +1697,7 @@ function gp(id,btn){
   window.scrollTo(0,0);
   rPage(id);
 }
-function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}if($('rc-date')&&!$('rc-date').value)$('rc-date').value=today();rRep();rRecon();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();rUsers();},50);}}
+function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}if($('rc-date')&&!$('rc-date').value)$('rc-date').value=today();rRep();rRecon();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();rUsers();},50);}else if(id==='pay')rPay();}
 function stab(t,btn){$('s-add').style.display=t==='add'?'block':'none';$('s-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#page-sales .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rSH();}
 function ptab(t,btn){['add','hist','exp','dft'].forEach(k=>$('p-'+k).style.display=t===k?'block':'none');document.querySelectorAll('#page-purch .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rPH();else if(t==='exp')rEH();else if(t==='dft')rDfts();}
 function etab(t,btn){$('exp-add').style.display=t==='add'?'block':'none';$('exp-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#p-exp .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rEH();}
@@ -3860,6 +3873,315 @@ function printTax(yrParam){
   <div class="note">Generated: ${new Date().toLocaleString()} · For income tax reference only. Verify figures with a qualified accountant.</div>
   <scr"+"ipt>window.onload=function(){setTimeout(function(){window.print();},300);}<\/scr"+"ipt></body></html>`);
   w.document.close();
+}
+
+/* ================= PAYROLL ================= */
+const PAYCO={name:'LEE & TY TRADING',reg:'Registration No.: 202503136552 (003732259-U)',addr:'37 Jalan 2/4, Taman Bukit Permai, Taman Bukit Permai, 56100 Kuala Lumpur',epf:'EPF Employer No.: 26531900'};
+const PAY={emps:[],slips:[],loaded:false,err:'',tab:'run',editId:null,viewId:null};
+const payR2=n=>Math.round((Number(n)||0)*100)/100;
+const payCeil=x=>Math.ceil(Math.round(x*100)/100);
+const payM$=n=>'RM '+fmt(n);
+const payML=m=>{if(!/^\d{4}-\d{2}$/.test(m||''))return m||'';const[y,mo]=m.split('-').map(Number);return new Date(y,mo-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});};
+const payMonthEnd=m=>{const[y,mo]=m.split('-').map(Number);return y+'-'+String(mo).padStart(2,'0')+'-'+String(new Date(y,mo,0).getDate()).padStart(2,'0');};
+const payLinkOn=()=>{try{return localStorage.getItem('lty_pay_link')!=='0';}catch(e){return true;}};
+function payEpf(wage){
+  if(!(wage>0))return{employee:0,employer:0,rate:13};
+  let base=wage;
+  if(wage<=20000){const step=wage<=5000?20:100;base=Math.ceil(wage/step-1e-9)*step;}
+  const rate=wage<=5000?13:12;
+  return{employee:payCeil(base*11/100),employer:payCeil(base*rate/100),rate};
+}
+function payCompute(o){
+  const monthly=o.type==='monthly';let basic,allowance=payR2(o.allow),monthlySalary=0,unpaidDays=0,unpaidDeduction=0,stdDays=Number(o.std)||26;
+  if(monthly){monthlySalary=Number(o.msal)||0;unpaidDays=Number(o.unpaid)||0;unpaidDeduction=stdDays>0?payR2(monthlySalary/stdDays*unpaidDays):0;basic=payR2(monthlySalary-unpaidDeduction);}
+  else basic=payR2((Number(o.rate)||0)*(Number(o.days)||0));
+  const gross=payR2(basic+allowance);
+  const ep=payEpf(gross),epfOn=!!o.epfOn,seOn=!!o.seOn;
+  const epfEmployee=epfOn?ep.employee:0,epfEmployer=ep.employer,epfEmployerBorne=epfOn?0:ep.employee;
+  const socsoEe=seOn?payR2(o.see):0,socsoEr=seOn?payR2(o.ser):0,eisEe=seOn?payR2(o.eie):0,eisEr=seOn?payR2(o.eir):0,pcb=payR2(o.pcb);
+  const totalDeductions=payR2(epfEmployee+socsoEe+eisEe+pcb);
+  return{payType:monthly?'monthly':'daily',basic,allowance,gross,monthlySalary,unpaidDays,unpaidDeduction,stdDays,
+    epfOn,epfEmployee,epfEmployer,epfEmployerRate:ep.rate,epfEmployerBorne,socsoEisOn:seOn,socsoEe,socsoEr,eisEe,eisEr,pcb,
+    totalDeductions,netPay:payR2(gross-totalDeductions),companyCost:payR2(gross+epfEmployer+epfEmployerBorne+socsoEr+eisEr)};
+}
+async function payLoad(force){
+  if(PAY.loaded&&!force)return;
+  const[e,s]=await Promise.all([sb.from('payroll_employees').select('*').order('name'),sb.from('payroll_slips').select('*').order('month',{ascending:false})]);
+  if(e.error||s.error){PAY.err=(e.error||s.error).message;PAY.loaded=false;return;}
+  PAY.err='';PAY.emps=e.data||[];
+  PAY.slips=(s.data||[]).map(r=>({...(r.data||{}),id:r.id,employeeId:r.employee_id,employeeName:r.employee_name,employeeIc:r.employee_ic,month:r.month,expenseId:r.expense_id,savedAt:r.saved_at,netPay:Number(r.net_pay),companyCost:Number(r.company_cost)}));
+  PAY.loaded=true;
+}
+async function rPay(){
+  injectPaySlipCss();
+  await payLoad();
+  const m=$('pay-msg');
+  if(PAY.err){
+    m.innerHTML=`<div class="info-box" style="border-left-color:var(--red)"><b>Payroll database not ready.</b><br>${esc(PAY.err)}<br>Run <b>payroll-setup.sql</b> once in Supabase &rarr; SQL Editor, then reopen this tab.<br><button class="btn btn-sm" style="margin-top:8px" onclick="PAY.loaded=false;rPay()"><i class="fa-solid fa-rotate"></i> Retry</button></div>`;
+    ['run','emp','hist'].forEach(k=>$('pay-'+k).innerHTML='');return;
+  }
+  m.innerHTML='';
+  payShow(PAY.tab);
+}
+function paytab(t,btn){
+  PAY.tab=t;document.querySelectorAll('#page-pay>.tabs .tab').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  if(PAY.loaded)payShow(t);
+}
+function payShow(t){
+  ['run','emp','hist'].forEach(k=>$('pay-'+k).style.display=k===t?'block':'none');
+  if(t==='run')payRunForm();else if(t==='emp')payEmpRender();else payHist();
+}
+/* ---------- Employees ---------- */
+function payEmpRender(){
+  const ed=PAY.emps.find(e=>e.id===PAY.editId);
+  const list=PAY.emps.map(e=>`<div class="tx"><div class="tx-l"><div class="tx-nm">${esc(e.name)}</div><div class="tx-sb">${esc(e.ic||'No IC')} · ${e.pay_type==='monthly'?'Monthly':'Daily'} · ${payM$(e.rate)}${e.pay_type==='monthly'?' / month':' / day'}</div></div>
+  <div class="tx-acts"><button class="btn btn-sm" onclick="payEmpEdit('${e.id}')"><i class="fa-solid fa-pen"></i></button><button class="btn btn-rd btn-sm btn-ic" onclick="payEmpDel('${e.id}')"><i class="fa-solid fa-trash"></i></button></div></div>`).join('')||'<div style="padding:14px;color:var(--t3);font-size:13px">No employees yet.</div>';
+  $('pay-emp').innerHTML=`<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-user-plus"></i>${ed?'Edit employee':'Add employee'}</span></div><div class="card-bd">
+  <div class="r2"><div class="fld"><label class="lbl">Name</label><input class="inp" id="pe-name" value="${esc(ed?.name||'')}"></div>
+  <div class="fld"><label class="lbl">IC / Passport No.</label><input class="inp" id="pe-ic" value="${esc(ed?.ic||'')}"></div></div>
+  <div class="r2"><div class="fld"><label class="lbl">Pay type</label><select class="inp" id="pe-type" onchange="payEmpLbl()"><option value="daily" ${ed?.pay_type!=='monthly'?'selected':''}>Daily rate</option><option value="monthly" ${ed?.pay_type==='monthly'?'selected':''}>Monthly salary</option></select></div>
+  <div class="fld"><label class="lbl" id="pe-rl">Daily rate (RM)</label><input class="inp" id="pe-rate" type="number" step="0.01" min="0" value="${ed?ed.rate:''}"></div></div>
+  <div style="display:flex;gap:8px"><button class="btn btn-pr" onclick="payEmpSave()"><i class="fa-solid fa-floppy-disk"></i> ${ed?'Update':'Add'}</button>${ed?'<button class="btn" onclick="PAY.editId=null;payEmpRender()">Cancel</button>':''}</div></div></div>
+  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-users"></i>Employees (${PAY.emps.length})</span></div><div>${list}</div></div>`;
+  payEmpLbl();
+}
+function payEmpLbl(){const t=$('pe-type');if(t)$('pe-rl').textContent=t.value==='monthly'?'Monthly salary (RM)':'Daily rate (RM)';}
+async function payEmpSave(){
+  const name=$('pe-name').value.trim(),ic=$('pe-ic').value.trim(),pay_type=$('pe-type').value,rate=Number($('pe-rate').value)||0;
+  if(!name){toast('Enter name','err');return;}
+  if(rate<=0){toast('Enter a rate','err');return;}
+  const row={name,ic,pay_type,rate};
+  const r=PAY.editId?await sb.from('payroll_employees').update(row).eq('id',PAY.editId):await sb.from('payroll_employees').insert(row);
+  if(r.error){toast(r.error.message,'err');return;}
+  PAY.editId=null;toast('Employee saved','ok');await payLoad(true);payEmpRender();
+}
+function payEmpEdit(id){PAY.editId=id;payEmpRender();window.scrollTo(0,0);}
+async function payEmpDel(id){
+  const e=PAY.emps.find(x=>x.id===id);if(!e||!confirm('Delete '+e.name+'? Saved payslips are kept in History.'))return;
+  const{error}=await sb.from('payroll_employees').delete().eq('id',id);
+  if(error){toast(error.message,'err');return;}
+  toast('Deleted','ok');await payLoad(true);payEmpRender();
+}
+/* ---------- Run payroll ---------- */
+function payRunForm(){
+  const el=$('pay-run');
+  if(!PAY.emps.length){el.innerHTML='<div class="info-box">Add an employee first (Employees tab).</div>';return;}
+  const keep=$('pr-emp')?.value;
+  el.innerHTML=`<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-money-check-dollar"></i>Run payroll</span></div><div class="card-bd">
+  <div class="r2"><div class="fld"><label class="lbl">Employee</label><select class="inp" id="pr-emp" onchange="payEmpPick()">${PAY.emps.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select></div>
+  <div class="fld"><label class="lbl">Pay month</label><input class="inp" type="month" id="pr-month" value="${today().slice(0,7)}" onchange="paySum()"></div></div>
+  <div id="pr-daily" class="r2"><div class="fld"><label class="lbl">Daily rate (RM)</label><input class="inp" type="number" step="0.01" id="pr-rate" oninput="payGross()"></div>
+  <div class="fld"><label class="lbl">Days worked</label><input class="inp" type="number" step="0.5" id="pr-days" oninput="payGross()"></div></div>
+  <div id="pr-monthly" class="r2" style="display:none"><div class="fld"><label class="lbl">Monthly salary (RM)</label><input class="inp" type="number" step="0.01" id="pr-msal" oninput="payGross()"></div>
+  <div class="fld"><label class="lbl">Unpaid leave (days)</label><input class="inp" type="number" step="0.5" id="pr-unpaid" value="0" oninput="payGross()"></div>
+  <div class="fld"><label class="lbl">Standard days / month</label><input class="inp" type="number" id="pr-std" value="26" oninput="payGross()"></div></div>
+  <div class="r2"><div class="fld"><label class="lbl">Allowance / bonus (RM)</label><input class="inp" type="number" step="0.01" id="pr-allow" value="0" oninput="payGross()"></div>
+  <div class="fld"><label class="lbl">PCB income tax (RM)</label><input class="inp" type="number" step="0.01" id="pr-pcb" value="0" oninput="paySum()"></div></div>
+  <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:6px 0"><input type="checkbox" id="pr-epf" checked onchange="paySum()"> Deduct employee EPF 11% from pay <span style="color:var(--t3)">(untick = company pays the 11%)</span></label>
+  <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:6px 0"><input type="checkbox" id="pr-se" onchange="payGross()"> SOCSO / EIS registered</label>
+  <div id="pr-sefields" style="display:none"><div class="r2"><div class="fld"><label class="lbl">SOCSO employee</label><input class="inp" type="number" step="0.01" id="pr-see" value="0" oninput="paySum()"></div><div class="fld"><label class="lbl">SOCSO employer</label><input class="inp" type="number" step="0.01" id="pr-ser" value="0" oninput="paySum()"></div>
+  <div class="fld"><label class="lbl">EIS employee</label><input class="inp" type="number" step="0.01" id="pr-eie" value="0" oninput="paySum()"></div><div class="fld"><label class="lbl">EIS employer</label><input class="inp" type="number" step="0.01" id="pr-eir" value="0" oninput="paySum()"></div></div></div>
+  <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:10px 0"><input type="checkbox" id="pr-link" ${payLinkOn()?'checked':''} onchange="try{localStorage.setItem('lty_pay_link',this.checked?'1':'0')}catch(e){}"> Record company cost in Expenses (category Salary)</label>
+  </div></div><div id="pr-sum"></div>
+  <button class="btn btn-pr" style="width:100%;margin-bottom:14px" onclick="paySave()"><i class="fa-solid fa-floppy-disk"></i> Save payslip</button><div id="pr-prev"></div>`;
+  if(keep&&PAY.emps.some(e=>e.id===keep))$('pr-emp').value=keep;
+  payEmpPick();
+}
+function payEmpPick(){
+  const e=PAY.emps.find(x=>x.id===$('pr-emp').value);if(!e)return;
+  const mo=e.pay_type==='monthly';
+  $('pr-daily').style.display=mo?'none':'grid';$('pr-monthly').style.display=mo?'grid':'none';
+  if(mo)$('pr-msal').value=e.rate;else $('pr-rate').value=e.rate;
+  $('pr-days').value='';$('pr-unpaid').value='0';$('pr-allow').value='0';$('pr-pcb').value='0';$('pr-prev').innerHTML='';
+  payGross();
+}
+function payInputs(){
+  const e=PAY.emps.find(x=>x.id===$('pr-emp').value)||{};
+  const g=id=>$(id)?.value;
+  return{type:e.pay_type==='monthly'?'monthly':'daily',rate:g('pr-rate'),days:g('pr-days'),msal:g('pr-msal'),unpaid:g('pr-unpaid'),std:g('pr-std'),allow:g('pr-allow'),
+    epfOn:$('pr-epf').checked,seOn:$('pr-se').checked,see:g('pr-see'),ser:g('pr-ser'),eie:g('pr-eie'),eir:g('pr-eir'),pcb:g('pr-pcb')};
+}
+function payGross(){
+  const o=payInputs();$('pr-sefields').style.display=o.seOn?'block':'none';
+  if(o.seOn){
+    const gross=payCompute({...o,seOn:false}).gross;
+    $('pr-see').value=(gross*0.005).toFixed(2);$('pr-ser').value=(gross*0.0175).toFixed(2);
+    $('pr-eie').value=(gross*0.002).toFixed(2);$('pr-eir').value=(gross*0.002).toFixed(2);
+  }
+  paySum();
+}
+function paySum(){
+  const c=payCompute(payInputs()),row=(a,b,cl)=>`<div class="bs-row ${cl||''}"><span>${a}</span><span>${b}</span></div>`;
+  $('pr-sum').innerHTML=`<div class="card"><div class="card-bd">
+  ${c.payType==='monthly'?row('Monthly salary',payM$(c.monthlySalary))+(c.unpaidDeduction?row('Less unpaid leave ('+c.unpaidDays+'d)','-'+payM$(c.unpaidDeduction)):''):row('Basic salary',payM$(c.basic))}
+  ${c.allowance?row('Allowance / bonus',payM$(c.allowance)):''}${row('<b>Gross pay</b>','<b>'+payM$(c.gross)+'</b>')}
+  ${row('EPF employee 11%'+(c.epfOn?'':' (waived)'),'-'+payM$(c.epfEmployee))}
+  ${c.socsoEisOn?row('SOCSO employee','-'+payM$(c.socsoEe))+row('EIS employee','-'+payM$(c.eisEe)):''}
+  ${c.pcb?row('PCB','-'+payM$(c.pcb)):''}
+  ${row('<b>NET PAY</b>','<b style="color:var(--grn)">'+payM$(c.netPay)+'</b>')}
+  <div style="height:8px"></div>
+  ${row('EPF employer '+c.epfEmployerRate+'%',payM$(c.epfEmployer))}${c.epfEmployerBorne?row('EPF employee 11% paid by company',payM$(c.epfEmployerBorne)):''}
+  ${c.socsoEisOn?row('SOCSO employer',payM$(c.socsoEr))+row('EIS employer',payM$(c.eisEr)):''}
+  ${row('<b>Total company cost</b>','<b>'+payM$(c.companyCost)+'</b>')}
+  <div class="info-box" style="margin:10px 0 0">EPF follows the KWSP Third Schedule. SOCSO/EIS are estimated (0.5%/1.75% and 0.2%/0.2%) &mdash; verify against PERKESO tables and edit if different.</div>
+  ${c.gross===0?'<div class="info-box" style="border-left-color:var(--red);margin-top:8px">Gross is RM 0.00 &mdash; check rate and days.</div>':''}
+  </div></div>`;
+}
+function payRowOf(rec){
+  const data={...rec};['id','employeeId','employeeName','employeeIc','month','expenseId','savedAt'].forEach(k=>delete data[k]);
+  return{employee_id:rec.employeeId||null,employee_name:rec.employeeName,employee_ic:rec.employeeIc||'',month:rec.month,data,net_pay:rec.netPay,company_cost:rec.companyCost,expense_id:rec.expenseId||null};
+}
+async function payExpSync(rec){
+  if(!payLinkOn())return rec.expenseId||null;
+  const row={entry_date:payMonthEnd(rec.month),category:'Salary',description:'Payroll '+rec.employeeName+' – '+payML(rec.month),amount:payR2(rec.companyCost),notes:'Auto from Payroll'};
+  if(rec.expenseId){
+    const u=await sb.from('expenses').update(row).eq('id',rec.expenseId).select('id');
+    if(u.error)throw u.error;if(u.data&&u.data.length)return rec.expenseId;
+  }
+  const i=await sb.from('expenses').insert({...row,user_id:S.user.id}).select('id').single();
+  if(i.error)throw i.error;return i.data.id;
+}
+async function paySave(){
+  const e=PAY.emps.find(x=>x.id===$('pr-emp').value),month=$('pr-month').value;
+  if(!e){toast('Pick an employee','err');return;}
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast('Pick the pay month','err');return;}
+  const o=payInputs(),c=payCompute(o);
+  if(c.gross===0&&!confirm('Gross pay is RM 0.00. Save anyway?'))return;
+  const old=PAY.slips.find(p=>p.employeeId===e.id&&p.month===month);
+  if(old&&!confirm(e.name+' already has a payslip for '+payML(month)+'. Overwrite?'))return;
+  if(!old&&!confirm('Save '+e.name+' – '+payML(month)+', net '+payM$(c.netPay)+'?'))return;
+  const rec={...c,employeeId:e.id,employeeName:e.name,employeeIc:e.ic,month,rate:Number(o.rate)||0,days:Number(o.days)||0,expenseId:old?.expenseId||null};
+  try{
+    rec.expenseId=await payExpSync(rec);
+    const r=await sb.from('payroll_slips').upsert(payRowOf(rec),{onConflict:'employee_id,month'}).select().single();
+    if(r.error)throw r.error;
+    rec.id=r.data.id;rec.savedAt=r.data.saved_at;
+  }catch(err){toast(err.message||'Save failed','err');return;}
+  logAct('Payroll','Saved payslip '+e.name+' '+month);
+  toast('Payslip saved','ok');
+  await payLoad(true);if(rec.expenseId&&payLinkOn())await loadAll();
+  $('pr-prev').innerHTML=`<div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Payslip</b><button class="btn btn-sm" onclick="payPrint('${rec.id}')"><i class="fa-solid fa-print"></i> Print / PDF</button></div>`+payDoc(rec);
+}
+/* ---------- History ---------- */
+function payHist(){
+  const months=[...new Set(PAY.slips.map(p=>p.month))].sort().reverse();
+  const fe=$('ph-emp')?.value||'',fm=$('ph-mon')?.value||'';
+  let ls=PAY.slips.filter(p=>(!fe||p.employeeId===fe)&&(!fm||p.month===fm));
+  const tn=ls.reduce((a,p)=>a+p.netPay,0),tc=ls.reduce((a,p)=>a+p.companyCost,0);
+  const view=PAY.slips.find(p=>p.id===PAY.viewId);
+  $('pay-hist').innerHTML=`${view?`<div class="card"><div class="card-hd"><span class="card-ti">Payslip</span><div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="payPrint('${view.id}')"><i class="fa-solid fa-print"></i> Print</button><button class="btn btn-sm" onclick="PAY.viewId=null;payHist()">Close</button></div></div><div class="card-bd">${payDoc(view)}</div></div>`:''}
+  <div class="card"><div class="card-bd"><div class="r2"><select class="inp sm" id="ph-emp" onchange="payHist()"><option value="">All employees</option>${PAY.emps.map(e=>`<option value="${e.id}" ${e.id===fe?'selected':''}>${esc(e.name)}</option>`).join('')}</select>
+  <select class="inp sm" id="ph-mon" onchange="payHist()"><option value="">All months</option>${months.map(m=>`<option value="${m}" ${m===fm?'selected':''}>${payML(m)}</option>`).join('')}</select></div></div></div>
+  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-clock-rotate-left"></i>Payslips (${ls.length})</span><span style="font-size:12px;color:var(--t3)">Net ${payM$(tn)} · Cost ${payM$(tc)}</span></div><div>
+  ${ls.map(p=>`<div class="tx"><div class="tx-l"><div class="tx-nm">${esc(p.employeeName)} · ${payML(p.month)}</div><div class="tx-sb">Gross ${payM$(p.gross)} · Net ${payM$(p.netPay)} · Cost ${payM$(p.companyCost)}${p.expenseId?' · in Expenses':''}</div>
+  <div class="tx-acts" style="margin-top:6px;flex-wrap:wrap"><button class="btn btn-sm" onclick="PAY.viewId='${p.id}';payHist();window.scrollTo(0,0)">View</button><button class="btn btn-sm" onclick="payPrint('${p.id}')">Print</button><button class="btn btn-sm" onclick="payChangeMonth('${p.id}')">Month</button><button class="btn btn-sm" onclick="payRecalcEpf('${p.id}')">Recalc EPF</button><button class="btn btn-rd btn-sm btn-ic" onclick="payDelSlip('${p.id}')"><i class="fa-solid fa-trash"></i></button></div></div></div>`).join('')||'<div style="padding:14px;color:var(--t3);font-size:13px">No payslips yet.</div>'}</div></div>
+  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-database"></i>Backup</span></div><div class="card-bd" style="display:flex;gap:8px;flex-wrap:wrap">
+  <button class="btn" onclick="payExport()"><i class="fa-solid fa-download"></i> Export JSON</button>
+  <button class="btn" onclick="$('pay-imp').click()"><i class="fa-solid fa-upload"></i> Import JSON</button><input type="file" id="pay-imp" accept=".json,application/json" style="display:none" onchange="payImport(this)"></div></div>`;
+}
+async function payUpdateSlip(rec){
+  rec.expenseId=await payExpSync(rec);
+  const r=await sb.from('payroll_slips').update(payRowOf(rec)).eq('id',rec.id);
+  if(r.error)throw r.error;
+}
+async function payChangeMonth(id){
+  const p=PAY.slips.find(x=>x.id===id);if(!p)return;
+  const m=prompt('Move payslip to month (YYYY-MM):',p.month);
+  if(!m||m===p.month)return;
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(m)){toast('Use YYYY-MM','err');return;}
+  if(PAY.slips.some(x=>x.employeeId===p.employeeId&&x.month===m&&x.id!==id)){toast('That month already has a payslip','err');return;}
+  try{p.month=m;await payUpdateSlip(p);}catch(e){toast(e.message,'err');return;}
+  toast('Moved','ok');await payLoad(true);if(payLinkOn())await loadAll();payHist();
+}
+async function payRecalcEpf(id){
+  const p=PAY.slips.find(x=>x.id===id);if(!p)return;
+  if(!confirm('Recalculate EPF for this payslip using the Third Schedule?'))return;
+  const ep=payEpf(p.gross);
+  p.epfEmployee=p.epfOn?ep.employee:0;p.epfEmployer=ep.employer;p.epfEmployerRate=ep.rate;p.epfEmployerBorne=p.epfOn?0:ep.employee;
+  p.totalDeductions=payR2(p.epfEmployee+(p.socsoEe||0)+(p.eisEe||0)+(p.pcb||0));
+  p.netPay=payR2(p.gross-p.totalDeductions);
+  p.companyCost=payR2(p.gross+p.epfEmployer+p.epfEmployerBorne+(p.socsoEr||0)+(p.eisEr||0));
+  try{await payUpdateSlip(p);}catch(e){toast(e.message,'err');return;}
+  toast('EPF recalculated','ok');await payLoad(true);if(payLinkOn())await loadAll();payHist();
+}
+async function payDelSlip(id){
+  const p=PAY.slips.find(x=>x.id===id);if(!p||!confirm('Delete payslip '+p.employeeName+' '+payML(p.month)+'?'))return;
+  if(p.expenseId&&confirm('Also delete the linked Salary expense?'))await sb.from('expenses').delete().eq('id',p.expenseId);
+  const{error}=await sb.from('payroll_slips').delete().eq('id',id);
+  if(error){toast(error.message,'err');return;}
+  if(PAY.viewId===id)PAY.viewId=null;
+  toast('Deleted','ok');await payLoad(true);await loadAll();payHist();
+}
+/* ---------- Payslip document ---------- */
+const PAY_SLIP_CSS=`.payslip-doc{position:relative;background:#fff;color:#111;padding:22px;font-family:Arial,Helvetica,sans-serif;font-size:12px;border:1px solid #ccc;max-width:720px;margin:0 auto}
+.payslip-doc .ph-name{font-size:20px;font-weight:800;text-align:center}.payslip-doc .ph-meta{text-align:center;font-size:10.5px;color:#444;margin:4px 0 12px;line-height:1.5}
+.payslip-doc .ph-title{text-align:center;font-weight:700;border-top:2px solid #111;border-bottom:2px solid #111;padding:6px 0;margin-bottom:10px}
+.payslip-doc .ph-info{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}.payslip-doc .ph-info span{display:block;font-size:10px;color:#666}
+.payslip-doc table{width:100%;border-collapse:collapse}.payslip-doc th,.payslip-doc td{border:1px solid #bbb;padding:5px 8px;text-align:left}.payslip-doc th{background:#eee}
+.payslip-doc td.num,.payslip-doc th.num{text-align:right;font-variant-numeric:tabular-nums}.payslip-doc tr.net td{background:#111;color:#fff}
+.payslip-doc .chop{position:absolute;right:30px;bottom:50px;width:120px;height:120px;color:#c0392b;opacity:.55;transform:rotate(-12deg);pointer-events:none}`;
+function injectPaySlipCss(){if($('pay-slip-css'))return;const s=document.createElement('style');s.id='pay-slip-css';s.textContent=PAY_SLIP_CSS;document.head.appendChild(s);}
+function payChop(savedAt){
+  const d=(savedAt?new Date(savedAt):new Date()).toLocaleDateString('en-GB');
+  return`<svg class="chop" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="100" cy="100" r="76" fill="none" stroke="currentColor" stroke-width="2"/><path id="chopcircle" d="M 100 24 A 76 76 0 1 1 99.9 24" fill="none"/><text font-family="monospace" font-size="12" font-weight="600" fill="currentColor" letter-spacing="2"><textPath href="#chopcircle" startOffset="2%">LEE &amp; TY TRADING • KUALA LUMPUR • </textPath></text><text x="100" y="95" text-anchor="middle" font-family="monospace" font-size="22" font-weight="700" fill="currentColor">PAID</text><text x="100" y="118" text-anchor="middle" font-family="monospace" font-size="11" fill="currentColor">${d}</text></svg>`;
+}
+function payDoc(r){
+  const n=v=>Number(v||0).toFixed(2),mo=r.payType==='monthly';
+  return`<div class="payslip-doc"><div class="ph-name">${esc(PAYCO.name)}</div><div class="ph-meta">${esc(PAYCO.reg)}<br>${esc(PAYCO.addr)}<br>${esc(PAYCO.epf)}</div>
+  <div class="ph-title">PAYSLIP / SLIP GAJI — ${payML(r.month)}</div>
+  <div class="ph-info"><div><span>Employee Name</span>${esc(r.employeeName)}</div><div><span>IC No.</span>${esc(r.employeeIc)||'-'}</div><div><span>Pay Period</span>${payML(r.month)}</div></div>
+  <table><thead><tr><th>Earnings</th><th class="num">Amount (RM)</th></tr></thead><tbody>
+  ${mo?`<tr><td>Monthly Salary</td><td class="num">${n(r.monthlySalary)}</td></tr>${r.unpaidDeduction?`<tr><td>Less: Unpaid Leave (${r.unpaidDays} day(s))</td><td class="num">-${n(r.unpaidDeduction)}</td></tr>`:''}`:`<tr><td>Basic Salary (${r.days} day(s) × RM${n(r.rate)})</td><td class="num">${n(r.basic)}</td></tr>`}
+  ${r.allowance?`<tr><td>Allowance / Bonus</td><td class="num">${n(r.allowance)}</td></tr>`:''}
+  <tr><td><b>Gross Pay</b></td><td class="num"><b>${n(r.gross)}</b></td></tr></tbody></table>
+  <table style="margin-top:10px"><thead><tr><th>Deductions</th><th class="num">Amount (RM)</th></tr></thead><tbody>
+  <tr><td>EPF - Employee (11%)</td><td class="num">${n(r.epfEmployee)}</td></tr>
+  ${r.socsoEisOn?`<tr><td>SOCSO - Employee</td><td class="num">${n(r.socsoEe)}</td></tr><tr><td>EIS - Employee</td><td class="num">${n(r.eisEe)}</td></tr>`:''}
+  ${r.pcb?`<tr><td>PCB (Income Tax)</td><td class="num">${n(r.pcb)}</td></tr>`:''}
+  <tr><td><b>Total Deductions</b></td><td class="num"><b>${n(r.totalDeductions)}</b></td></tr></tbody></table>
+  <table style="margin-top:10px"><tbody><tr class="net"><td><b>NET PAY</b></td><td class="num"><b>${n(r.netPay)}</b></td></tr></tbody></table>
+  <table style="margin-top:10px"><thead><tr><th>Employer's Contribution (Company Cost — Not Deducted From Employee)</th><th class="num">Amount (RM)</th></tr></thead><tbody>
+  <tr><td>EPF - Employer's Share (${r.epfEmployerRate||13}%)</td><td class="num">${n(r.epfEmployer)}</td></tr>
+  ${r.epfEmployerBorne?`<tr><td>EPF - Employee's 11% Paid By Company</td><td class="num">${n(r.epfEmployerBorne)}</td></tr>`:''}
+  ${r.socsoEisOn?`<tr><td>SOCSO - Employer</td><td class="num">${n(r.socsoEr)}</td></tr><tr><td>EIS - Employer</td><td class="num">${n(r.eisEr)}</td></tr>`:''}
+  <tr><td><b>Total EPF Remitted to KWSP (Employee + Employer)</b></td><td class="num"><b>${n((r.epfEmployee||0)+(r.epfEmployer||0)+(r.epfEmployerBorne||0))}</b></td></tr></tbody></table>
+  <div style="margin-top:26px;display:flex;justify-content:space-between;font-size:12px"><div>Prepared By: ______________</div><div>Employee Signature: ______________</div></div>
+  ${payChop(r.savedAt)}</div>`;
+}
+function payPrint(id){
+  const r=PAY.slips.find(x=>x.id===id)||(PAY.lastRec&&PAY.lastRec.id===id?PAY.lastRec:null);if(!r){toast('Payslip not found','err');return;}
+  const w=window.open('','_blank');if(!w){toast('Allow pop-ups to print','err');return;}
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Payslip '+esc(r.employeeName)+' '+r.month+'</title><style>body{margin:0;padding:16px}@media print{.payslip-doc{border:none}}'+PAY_SLIP_CSS+'</style></head><body>'+payDoc(r)+'</body></html>');
+  w.document.close();w.focus();setTimeout(()=>{try{w.print();}catch(e){}},400);
+}
+/* ---------- Backup ---------- */
+function payExport(){
+  const out={exportedAt:new Date().toISOString(),employees:PAY.emps.map(e=>({id:e.id,name:e.name,ic:e.ic||'',rate:Number(e.rate),payType:e.pay_type})),payslips:PAY.slips};
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+  a.download='payroll-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+async function payImport(inp){
+  const f=inp.files[0];inp.value='';if(!f)return;
+  try{
+    const j=JSON.parse(await f.text());
+    if(!Array.isArray(j.employees)||!Array.isArray(j.payslips))throw new Error('Not a payroll backup file');
+    if(!confirm('Import '+j.employees.length+' employees and '+j.payslips.length+' payslips? Existing payslips for the same employee and month are overwritten. Expenses are not created.'))return;
+    const map={};
+    for(const e of j.employees){
+      let m=PAY.emps.find(x=>x.name.trim().toLowerCase()===String(e.name||'').trim().toLowerCase());
+      if(!m){const r=await sb.from('payroll_employees').insert({name:e.name,ic:e.ic||'',pay_type:e.payType==='monthly'?'monthly':'daily',rate:Number(e.rate)||0}).select().single();if(r.error)throw r.error;m=r.data;PAY.emps.push(m);}
+      map[e.id]=m.id;
+    }
+    let n=0;
+    for(const s of j.payslips){
+      const eid=map[s.employeeId];if(!eid||!/^\d{4}-\d{2}$/.test(s.month||''))continue;
+      const rec={...s,employeeId:eid,expenseId:null};
+      const r=await sb.from('payroll_slips').upsert(payRowOf(rec),{onConflict:'employee_id,month'});
+      if(r.error)throw r.error;n++;
+    }
+    toast('Imported '+n+' payslips','ok');await payLoad(true);payShow(PAY.tab);
+  }catch(e){toast('Import failed: '+(e.message||e),'err');}
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
