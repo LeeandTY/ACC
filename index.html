@@ -750,7 +750,6 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
       </div>
       <div class="btn-row">
         <button class="btn btn-pr" id="s-btn" onclick="doSaveSale()"><i class="fa-solid fa-check"></i> Record &amp; generate invoice</button>
-        <button class="btn btn-sm" onclick="openATPFromForm()" title="Review items before adding to purchase drafts"><i class="fa-solid fa-cart-plus"></i> Add to drafts</button>
       </div>
       <button class="btn btn-fw" onclick="openScanner('s')" style="margin-top:8px;background:var(--surf);border:1px solid var(--bdr)"><i class="fa-solid fa-camera" style="color:var(--br);margin-right:6px"></i>Scan Written Invoice <span style="font-size:10px;background:var(--gnl);color:var(--grn);padding:2px 6px;border-radius:8px;margin-left:4px;font-weight:700">FREE</span></button>
     </div></div>
@@ -2282,7 +2281,7 @@ function rSH(){
     const si=getSI(s.id);
     const dr=si.length?si.map(r=>`${mName(r)} x${r.qty}${r.uom?' '+r.uom:''}`).join(', '):(s.notes||'');
     html+=`<div class="tx"><div class="tx-l"><div class="tx-nm">${esc(s.customer_name||'?')}</div><div class="tx-sb">${esc(dr.substring(0,70))}${dr.length>70?'…':''}</div></div>
-    <div style="text-align:right"><div class="tx-am g">RM ${fmt(s.amount)}</div><div class="tx-acts" style="justify-content:flex-end"><button class="btn btn-sm" onclick="editSale('${s.id}')"><i class="fa-solid fa-pen"></i> Edit</button><button class="btn btn-sm" onclick="openATPFromSale('${s.id}')" title="Add to purchase drafts"><i class="fa-solid fa-cart-plus"></i></button><button class="btn btn-rd btn-sm btn-ic" onclick="delSale('${s.id}')"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
+    <div style="text-align:right"><div class="tx-am g">RM ${fmt(s.amount)}</div><div class="tx-acts" style="justify-content:flex-end"><button class="btn btn-sm" onclick="viewSale('${s.id}')"><i class="fa-solid fa-eye"></i> View</button></div></div></div>`;
     if(dupKeys[s.entry_date+'|'+(s.customer_name||'')]&&!dupShown[s.entry_date+'|'+(s.customer_name||'')]){
       dupShown[s.entry_date+'|'+(s.customer_name||'')]=1;
       const k=dupKeys[s.entry_date+'|'+(s.customer_name||'')];
@@ -2418,6 +2417,19 @@ function doRepeat(){
   recalcTot('p');
   toast('Filled from last purchase — edit as needed','ok');
 }
+function recView(kind,r){
+  const sale=kind==='s',its=(sale?getSI(r.id):getPI(r.id))||[];
+  const who=sale?r.customer_name:r.supplier_name,txt=sale?(r.notes||''):(r.description||'');
+  const rows=its.map(x=>{const t=x.total!=null?Number(x.total):Number(x.qty)*Number(x.unit_price);return`<tr${t<0?' style="color:var(--red)"':''}><td>${esc(mName(x))}</td><td class="n">${x.qty}${x.uom?' '+esc(x.uom):''}</td><td class="n">${fmt(x.unit_price)}</td><td class="n">${fmt(t)}</td></tr>`;}).join('');
+  const f=sale?'Sale':'Purch',amt=`<span style="color:${sale?'var(--grn)':'var(--red)'}">RM ${fmt(r.amount)}</span>`;
+  openM(`<div class="m-hd"><div class="m-ti">${sale?'Sale':'Purchase'}</div><button class="m-x" onclick="closeM()">×</button></div>
+  <div style="background:var(--surf);border-radius:var(--rs);padding:12px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap"><div><div style="font-weight:700;font-size:15px;color:var(--t1)">${esc(who||'?')}</div><div style="font-size:12px;color:var(--t3);margin-top:3px">${fmtD(r.entry_date)}</div></div><div style="font-size:22px;font-weight:800">${amt}</div></div>
+  ${rows?`<div class="tw"><table class="tbl" style="margin-bottom:14px"><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th></tr></thead><tbody>${rows}</tbody></table></div>`:(txt?`<div style="font-size:13px;color:var(--t2);padding:10px;background:var(--surf);border-radius:var(--rs);margin-bottom:14px">${esc(txt)}</div>`:'')}
+  ${rows&&(sale?r.notes:r.notes)?`<div style="font-size:12px;color:var(--t3);padding:10px;background:var(--surf);border-radius:var(--rs);margin-bottom:14px">${esc(r.notes)}</div>`:''}
+  <div class="btn-row"><button class="btn" onclick="closeM()">Close</button><button class="btn btn-pr" onclick="closeM();${sale?'editSale':'editPurch'}('${r.id}')"><i class="fa-solid fa-pen"></i> Edit</button><button class="btn btn-rd" onclick="closeM();${sale?'delSale':'delPurch'}('${r.id}')"><i class="fa-solid fa-trash"></i> Delete</button></div>`);
+}
+function viewSale(id){const r=S.sales.find(x=>x.id===id);if(r)recView('s',r);}
+function viewPurch(id){const r=S.purch.find(x=>x.id===id);if(r)recView('p',r);}
 function rPH(){
   const q=($('ph-q')?.value||'').toLowerCase(),dt=$('ph-dt')?.value||'',sf=$('ph-s')?.value||'';
   let ls=S.purch;if(dt)ls=ls.filter(p=>p.entry_date===dt);if(sf)ls=ls.filter(p=>p.supplier_name===sf);
@@ -2429,7 +2441,7 @@ function rPH(){
     if(p.entry_date!==last){const dt=ls.filter(x=>x.entry_date===p.entry_date);html+=`<div class="day-hd"><span>${fmtD(p.entry_date)}</span><span style="color:var(--red)">RM ${fmt(sumAmt(dt))}</span></div>`;last=p.entry_date;}
     const pi=getPI(p.id);const dr=pi.length?pi.map(r=>`${mName(r)} x${r.qty}${r.uom?' '+r.uom:''}`).join(', '):(p.description||'');
     html+=`<div class="tx"><div class="tx-l"><div class="tx-nm">${esc(p.supplier_name||'?')}</div><div class="tx-sb">${esc(dr.substring(0,70))}${dr.length>70?'…':''}${p.notes?' · '+esc(p.notes):''}</div></div>
-    <div style="text-align:right"><div class="tx-am r">RM ${fmt(p.amount)}</div><div class="tx-acts" style="justify-content:flex-end"><button class="btn btn-sm" onclick="editPurch('${p.id}')"><i class="fa-solid fa-pen"></i> Edit</button><button class="btn btn-rd btn-sm btn-ic" onclick="delPurch('${p.id}')"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
+    <div style="text-align:right"><div class="tx-am r">RM ${fmt(p.amount)}</div><div class="tx-acts" style="justify-content:flex-end"><button class="btn btn-sm" onclick="viewPurch('${p.id}')"><i class="fa-solid fa-eye"></i> View</button></div></div></div>`;
   });
   $('ph-bd').innerHTML=html+`<div class="tot-row"><span>${ls.length} records</span><span style="color:var(--red)">RM ${fmt(tot)}</span></div>`;
 }
