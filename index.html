@@ -682,6 +682,7 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
   <button class="nb on" onclick="gp('dash',this)"><i class="fa-solid fa-gauge-high"></i><span>Dashboard</span></button>
   <button class="nb" onclick="gp('sales',this)"><i class="fa-solid fa-arrow-trend-up"></i><span>Sales</span></button>
   <button class="nb" onclick="gp('purch',this)"><i class="fa-solid fa-cart-shopping"></i><span>Purchases</span></button>
+  <button class="nb" onclick="gp('exp',this)"><i class="fa-solid fa-receipt"></i><span>Expenses</span></button>
   <button class="nb" onclick="gp('inv',this)"><i class="fa-solid fa-file-invoice"></i><span>Invoices</span></button>
   <button class="nb" onclick="gp('prices',this)"><i class="fa-solid fa-tags"></i><span>Prices</span></button>
   <button class="nb" onclick="gp('rep',this)"><i class="fa-solid fa-chart-bar"></i><span>Reports</span></button>
@@ -770,7 +771,6 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
   <div class="tabs">
     <button class="tab on" onclick="ptab('add',this)"><i class="fa-solid fa-plus"></i> Record</button>
     <button class="tab" onclick="ptab('hist',this)"><i class="fa-solid fa-list"></i> History</button>
-    <button class="tab" onclick="ptab('exp',this)"><i class="fa-solid fa-receipt"></i> Expenses</button>
     <button class="tab" onclick="ptab('dft',this)"><i class="fa-solid fa-clipboard-list"></i> Drafts<span id="dft-n" style="display:none;background:var(--red);color:#fff;border-radius:99px;padding:1px 6px;font-size:10px;margin-left:4px"></span></button>
   </div>
   <div id="p-add">
@@ -814,26 +814,6 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
     <div class="sum-bar"><span>Total shown</span><strong id="ph-tot" style="color:var(--red)">RM 0.00</strong></div>
     <div class="card"><div id="ph-bd"></div></div>
   </div>
-  <div id="p-exp" style="display:none">
-    <div class="tabs" style="margin-bottom:12px">
-      <button class="tab on" onclick="etab('add',this)"><i class="fa-solid fa-plus"></i> Add expense</button>
-      <button class="tab" onclick="etab('hist',this)"><i class="fa-solid fa-list"></i> History</button>
-    </div>
-    <div id="exp-add">
-      <div class="info-box pu"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>Expenses are non-inventory costs (rent, transport, packaging, utilities) — tracked separately from purchases.</div>
-      <div class="card"><div class="card-bd">
-        <div class="r2"><div class="fld"><label class="lbl">Date</label><input class="inp" type="date" id="e-date"></div><div class="fld"><label class="lbl">Category</label><select class="inp" id="e-cat"></select></div></div>
-        <div class="fld"><label class="lbl">Description *</label><input class="inp" id="e-desc" placeholder="e.g. Petrol for delivery, plastic bags..."></div>
-        <div class="r2"><div class="fld"><label class="lbl">Amount (RM) *</label><input class="inp" type="number" id="e-amt" placeholder="0.00" step="0.01" min="0"></div><div class="fld"><label class="lbl">Notes</label><input class="inp" id="e-notes" placeholder="Receipt no..."></div></div>
-        <button class="btn btn-pu btn-fw" onclick="saveExp()"><i class="fa-solid fa-check"></i> Record expense</button>
-      </div></div>
-    </div>
-    <div id="exp-hist" style="display:none">
-      <div class="filter-row"><input class="inp sm" type="date" id="ef-dt" onchange="rEH()"><select class="inp sm" id="ef-c" onchange="rEH()"><option value="">All categories</option></select></div>
-      <div class="sum-bar"><span>Total</span><strong id="eh-tot" style="color:var(--pur)">RM 0.00</strong></div>
-      <div class="card"><div id="eh-bd"></div></div>
-    </div>
-  </div>
   <div id="p-dft" style="display:none">
     <div class="info-box"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>Items from sales "Add to drafts". Fill in supplier and price, tick items, then create a purchase.</div>
     <div class="card"><div class="card-bd">
@@ -851,7 +831,30 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
   </div>
 </div>
 
+<!-- EXPENSES -->
+<div id="page-exp" class="page">
+    <div id="exp-add">
+      <div class="info-box pu"><i class="fa-solid fa-circle-info" style="margin-right:6px"></i>Expenses are non-inventory costs (rent, transport, packaging, utilities) — tracked separately from purchases.</div>
+      <div class="card"><div class="card-bd">
+        <div class="r2"><div class="fld"><label class="lbl">Date</label><input class="inp" type="date" id="e-date"></div><div class="fld"><label class="lbl">Category</label><select class="inp" id="e-cat"></select></div></div>
+        <div class="fld"><label class="lbl">Description *</label><input class="inp" id="e-desc" placeholder="e.g. Petrol for delivery, plastic bags..."></div>
+        <div class="r2"><div class="fld"><label class="lbl">Amount (RM) *</label><input class="inp" type="number" id="e-amt" placeholder="0.00" step="0.01" min="0"></div><div class="fld"><label class="lbl">Notes</label><input class="inp" id="e-notes" placeholder="Receipt no..."></div></div>
+        <button class="btn btn-pu btn-fw" onclick="saveExp()"><i class="fa-solid fa-check"></i> Record expense</button>
+      </div></div>
+    </div>
+    <div id="exp-hist" style="display:none">
+      <div class="filter-row"><input class="inp sm" type="date" id="ef-dt" onchange="rEH()"><select class="inp sm" id="ef-c" onchange="rEH()"><option value="">All categories</option></select></div>
+      <div class="sum-bar"><span>Total</span><strong id="eh-tot" style="color:var(--pur)">RM 0.00</strong></div>
+      <div class="card"><div id="eh-bd"></div></div>
+    </div>
+  <div class="tabs">
+    <button class="tab on" onclick="etab('add',this)"><i class="fa-solid fa-plus"></i> Add expense</button>
+    <button class="tab" onclick="etab('hist',this)"><i class="fa-solid fa-list"></i> History</button>
+  </div>
+</div>
+
 <!-- INVOICES -->
+
 <div id="page-inv" class="page">
   <div class="filter-row"><input class="inp sm" type="date" id="if-f" onchange="rInv()"><input class="inp sm" type="date" id="if-t" onchange="rInv()"></div>
   <div class="filter-row">
@@ -1712,11 +1715,11 @@ function gp(id,btn){
   window.scrollTo(0,0);
   rPage(id);
 }
-function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}if($('rc-date')&&!$('rc-date').value)$('rc-date').value=today();rRep();rRecon();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();rUsers();},50);}else if(id==='pay')rPay();else if(id==='fin')rFin();}
+function rPage(id){if(id==='dash')rDash();else if(id==='inv'){fillInvFilters();rInv();}else if(id==='prices')rPrices();else if(id==='rep'){if(!$('rp-f').value){$('rp-f').value=fom();$('rp-t').value=today();}if($('rc-date')&&!$('rc-date').value)$('rc-date').value=today();rRep();rRecon();}else if(id==='set'){rSet();setTimeout(()=>{rActLog();showBkpStatus();rUsers();},50);}else if(id==='pay')rPay();else if(id==='fin')rFin();else if(id==='exp'){if($('e-date')&&!$('e-date').value)$('e-date').value=today();rEH();}}
 function stab(t,btn){$('s-add').style.display=t==='add'?'block':'none';$('s-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#page-sales .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rSH();}
-function ptab(t,btn){['add','hist','exp','dft'].forEach(k=>$('p-'+k).style.display=t===k?'block':'none');document.querySelectorAll('#page-purch .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rPH();else if(t==='exp')rEH();else if(t==='dft')rDfts();}
-function etab(t,btn){$('exp-add').style.display=t==='add'?'block':'none';$('exp-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#p-exp .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rEH();}
-function goToDrafts(){gp('purch',document.querySelectorAll('.nb')[2]);setTimeout(()=>ptab('dft',document.querySelectorAll('#page-purch .tab')[3]),80);}
+function ptab(t,btn){['add','hist','dft'].forEach(k=>$('p-'+k).style.display=t===k?'block':'none');document.querySelectorAll('#page-purch .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rPH();else if(t==='dft')rDfts();}
+function etab(t,btn){$('exp-add').style.display=t==='add'?'block':'none';$('exp-hist').style.display=t==='hist'?'block':'none';document.querySelectorAll('#page-exp .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(t==='hist')rEH();}
+function goToDrafts(){gp('purch',document.querySelectorAll('.nb')[2]);setTimeout(()=>ptab('dft',document.querySelectorAll('#page-purch .tab')[2]),80);}
 
 function setRange(k,btn){
   const n=new Date();
