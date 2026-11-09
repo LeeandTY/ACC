@@ -2233,7 +2233,9 @@ async function delSale(id){
   if(!confirm('Delete this sale'+(_li.length?' AND its invoice '+_li.map(i=>i.invoice_number).join(', '):'')+'?'))return;
   if(_li.length){const ids=_li.map(i=>i.id);await sb.from('invoice_payments').delete().in('invoice_id',ids);await sb.from('invoice_items').delete().in('invoice_id',ids);await sb.from('invoices').delete().in('id',ids);}
   await sb.from('sale_items').delete().eq('sale_id',id);
+  const _ds=(S.sales||[]).find(x=>x.id===id);
   await sb.from('daily_sales').delete().eq('id',id);
+  logAct('delete','Sale deleted: '+(_ds?.customer_name||'?')+(_ds?.entry_date?' ('+_ds.entry_date+')':'')+(_li.length?' + invoice '+_li.map(i=>i.invoice_number).join(', '):''));
   toast('Deleted');await loadAll();rSH();
 }
 async function sendToDrafts(){
@@ -2387,7 +2389,7 @@ async function saveEditedPurch(){
 function getEPRows(){
   return[...$('ep-items-list').querySelectorAll('.ie-p-row')].map(r=>({name:(r.querySelector('.name-inp').value||'').trim(),uom:(r.querySelector('.uom-inp').value||'').trim(),qty:parseFloat(r.querySelector('.qty-inp').value)||0,unit_price:parseFloat(r.querySelector('.price-inp').value)||0,total:parseFloat(r.querySelector('.total-inp').value)||0})).filter(r=>r.name&&r.qty!==0);
 }
-async function delPurch(id){if(!confirm('Delete?'))return;await sb.from('purchase_items').delete().eq('purchase_id',id);await sb.from('daily_purchases').delete().eq('id',id);toast('Deleted');await loadAll();rPH();}
+async function delPurch(id){if(!confirm('Delete?'))return;{const _p=(S.purch||[]).find(x=>x.id===id);logAct('delete','Purchase deleted: '+(_p?.supplier_name||'?')+(_p?.amount!=null?' — RM '+fmt(_p.amount):''));}await sb.from('purchase_items').delete().eq('purchase_id',id);await sb.from('daily_purchases').delete().eq('id',id);toast('Deleted');await loadAll();rPH();}
 function doRepeat(){
   const sup=$('p-repeat').value;if(!sup)return;
   const last=S.purch.filter(p=>p.supplier_name===sup).sort((a,b)=>b.entry_date.localeCompare(a.entry_date))[0];
@@ -2422,6 +2424,7 @@ async function saveExp(){
   const{error}=await sb.from('expenses').insert({user_id:S.user.id,entry_date:d,category:c,description:desc,amount:amt,notes:$('e-notes').value});
   if(error){toast(error.message,'err');return;}
   $('e-desc').value='';$('e-amt').value='';$('e-notes').value='';
+  logAct('create','Expense: '+desc+' — RM '+fmt(amt)+' ('+c+')');
   toast('Expense recorded','ok');await loadAll();rEH();
 }
 function rEH(){
@@ -2577,10 +2580,11 @@ async function addPay(iid){
     const newStatus=newPaid>=tot?'paid':(newPaid<=0?'sent':'partial');
     await sb.from('invoices').update({status:newStatus}).eq('id',iid);
   }
+  logAct('payment',`${a<0?'Refund':'Payment'} RM ${fmt(Math.abs(a))} (${m}) on ${(S.invs||[]).find(x=>x.id===iid)?.invoice_number||'invoice'}`);
   toast(`${a<0?'Refund':'Payment'} recorded (${m==='transfer'?'Transfer':'Cash'})`,'ok');await loadAll();rInv();viewInv(iid);
 }
-async function delPay(pid,iid){if(!confirm('Remove?'))return;await sb.from('invoice_payments').delete().eq('id',pid);await loadAll();rInv();viewInv(iid);}
-async function delInv(id){if(!confirm('Delete invoice?'))return;await sb.from('invoice_payments').delete().eq('invoice_id',id);await sb.from('invoice_items').delete().eq('invoice_id',id);await sb.from('invoices').delete().eq('id',id);closeM();toast('Deleted');await loadAll();rInv();}
+async function delPay(pid,iid){if(!confirm('Remove?'))return;{const _p=(S.pays||[]).find(x=>x.id===pid),_i=(S.invs||[]).find(x=>x.id===iid);logAct('delete','Payment removed: '+(_i?.invoice_number||'')+(_p?' — RM '+fmt(_p.amount):''));}await sb.from('invoice_payments').delete().eq('id',pid);await loadAll();rInv();viewInv(iid);}
+async function delInv(id){if(!confirm('Delete invoice?'))return;{const _i=(S.invs||[]).find(x=>x.id===id);logAct('delete','Invoice deleted: '+(_i?.invoice_number||id)+(_i?.total!=null?' — RM '+fmt(_i.total):''));}await sb.from('invoice_payments').delete().eq('invoice_id',id);await sb.from('invoice_items').delete().eq('invoice_id',id);await sb.from('invoices').delete().eq('id',id);closeM();toast('Deleted');await loadAll();rInv();}
 function printInv(id){
   const inv=S.invs.find(i=>i.id===id);if(!inv)return;
   const its=(inv.items||[]).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
@@ -2639,12 +2643,31 @@ async function adjStock(id,delta){const p=S.prices.find(x=>x.id===id);if(!p)retu
 
 // ── ACTIVITY LOG ──
 const _log=[];
-function logAct(action,desc){_log.unshift({action,desc,time:new Date().toISOString()});if(_log.length>200)_log.length=200;try{localStorage.setItem('lty_actlog',JSON.stringify(_log.slice(0,200)));}catch(e){}}
+let _auditOff=false;
+function logAct(action,desc){
+  _log.unshift({action,desc,time:new Date().toISOString()});if(_log.length>200)_log.length=200;
+  try{localStorage.setItem('lty_actlog',JSON.stringify(_log.slice(0,200)));}catch(e){}
+  if(_auditOff||typeof sb==='undefined'||!S.user)return;
+  sb.from('audit_log').insert({user_email:S.user.email||'',action:String(action).toLowerCase(),description:String(desc).slice(0,500)}).then(r=>{if(r&&r.error&&/audit_log|relation|schema cache/i.test(r.error.message||''))_auditOff=true;}).catch(()=>{});
+}
 function loadLog(){try{const s=localStorage.getItem('lty_actlog');if(s){const a=JSON.parse(s);_log.push(...a);}}catch(e){}}
-function rActLog(){
+let _auditFilter='';
+async function rActLog(){
   const el=$('act-log-bd');if(!el)return;
-  if(!_log.length){el.innerHTML='<div class="empty"><i class="fa-solid fa-clock-rotate-left"></i><p>No activity yet</p></div>';return;}
-  el.innerHTML=_log.slice(0,50).map(a=>{const ico=a.action==='create'?'fa-plus':a.action==='edit'?'fa-pen':a.action==='delete'?'fa-trash':'fa-circle';const col=a.action==='delete'?'var(--red)':a.action==='create'?'var(--grn)':'var(--br)';return`<div class="tx"><div style="width:28px;height:28px;border-radius:50%;background:${col}1A;color:${col};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ${ico}" style="font-size:11px"></i></div><div class="tx-l"><div class="tx-nm" style="font-size:13px">${esc(a.desc)}</div><div class="tx-sb">${new Date(a.time).toLocaleString('en-MY')}</div></div></div>`;}).join('');
+  let rows=null,shared=false;
+  if(!_auditOff){
+    const r=await sb.from('audit_log').select('*').order('created_at',{ascending:false}).limit(300);
+    if(!r.error){rows=r.data.map(x=>({action:x.action,desc:x.description,time:x.created_at,who:x.user_email}));shared=true;}
+    else if(/audit_log|relation|schema cache/i.test(r.error.message||''))_auditOff=true;
+  }
+  if(!rows)rows=_log;
+  const hd=$('act-log-hd');
+  if(hd)hd.innerHTML=shared?'<span style="font-size:11px;color:var(--t3)">Shared · all users</span>':'<span style="font-size:11px;color:var(--t3)">This device only — run audit-log-setup.sql to share</span>';
+  const f=_auditFilter;
+  const ls=rows.filter(a=>!f||a.action===f).slice(0,100);
+  const bar=`<div style="padding:8px 14px;display:flex;gap:6px;flex-wrap:wrap">${['','create','edit','delete','payroll','payment'].map(k=>`<button class="btn btn-sm ${f===k?'btn-pr':''}" onclick="_auditFilter='${k}';rActLog()">${k||'All'}</button>`).join('')}</div>`;
+  if(!ls.length){el.innerHTML=bar+'<div class="empty"><i class="fa-solid fa-clock-rotate-left"></i><p>No activity yet</p></div>';return;}
+  el.innerHTML=bar+ls.map(a=>{const ico=a.action==='create'?'fa-plus':a.action==='edit'?'fa-pen':a.action==='delete'?'fa-trash':a.action==='payment'?'fa-coins':a.action==='payroll'?'fa-money-check-dollar':'fa-circle';const col=a.action==='delete'?'var(--red)':a.action==='create'?'var(--grn)':'var(--br)';return`<div class="tx"><div style="width:28px;height:28px;border-radius:50%;background:${col}1A;color:${col};display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fa-solid ${ico}" style="font-size:11px"></i></div><div class="tx-l"><div class="tx-nm" style="font-size:13px">${esc(a.desc)}</div><div class="tx-sb">${new Date(a.time).toLocaleString('en-MY')}${a.who?' · '+esc(a.who):''}</div></div></div>`;}).join('');
 }
 
 // ── CUSTOMER/SUPPLIER ADD IN SETTINGS ──
@@ -2654,14 +2677,14 @@ async function addCustomer(){
   if(error){toast(error.message,'err');return;}
   toast('Customer added','ok');await loadAll();rSet();
 }
-async function delCustomer(id){if(!confirm('Remove?'))return;await sb.from('market_customers').delete().eq('id',id);await loadAll();rSet();}
+async function delCustomer(id){if(!confirm('Remove?'))return;logAct('delete','Customer removed: '+((S.custs||[]).find(x=>x.id===id)?.name||id));await sb.from('market_customers').delete().eq('id',id);await loadAll();rSet();}
 async function addSupplier(){
   const nm=prompt('New supplier name:');if(!nm?.trim())return;
   const{error}=await sb.from('suppliers').insert({user_id:S.user.id,name:nm.trim()});
   if(error){toast(error.message,'err');return;}
   toast('Supplier added','ok');await loadAll();rSet();
 }
-async function delSupplier(id){if(!confirm('Remove?'))return;await sb.from('suppliers').delete().eq('id',id);await loadAll();rSet();}
+async function delSupplier(id){if(!confirm('Remove?'))return;logAct('delete','Supplier removed: '+((S.sups||[]).find(x=>x.id===id)?.name||id));await sb.from('suppliers').delete().eq('id',id);await loadAll();rSet();}
 
 // ── ITEM RENAME (updates everywhere) ──
 function openRenameModal(){
@@ -2930,7 +2953,7 @@ function rSet(){
       <button class="btn btn-fw" onclick="printTax($('sc-tax-yr').value)" style="flex:1"><i class="fa-solid fa-file-pdf"></i> Year-End Tax Summary</button>
     </div>
   </div></div>
-  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-clock-rotate-left"></i>Activity Log</span></div><div id="act-log-bd" style="max-height:280px;overflow-y:auto"></div></div>
+  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-clock-rotate-left"></i>Activity Log</span><span id="act-log-hd"></span></div><div id="act-log-bd" style="max-height:340px;overflow-y:auto"></div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-user-shield"></i>Manage Users</span></div>
     <div class="info-box" style="margin:10px 16px 0">Only emails on this list can sign in and see the data. A new person adds their login with <strong>Sign Up</strong> on the sign-in screen, using the email you add here. Removing someone locks them out straight away.</div>
     <div class="card-bd" style="padding-bottom:6px"><div style="display:flex;gap:8px"><input class="inp" type="email" id="usr-em" placeholder="new.user@email.com" autocomplete="off" style="flex:1;min-width:0" onkeydown="if(event.key==='Enter')addUser()"><button class="btn btn-pr" onclick="addUser()"><i class="fa-solid fa-user-plus"></i> Add</button></div></div>
@@ -4058,7 +4081,7 @@ async function paySave(){
     if(r.error)throw r.error;
     rec.id=r.data.id;rec.savedAt=r.data.saved_at;
   }catch(err){toast(err.message||'Save failed','err');return;}
-  logAct('Payroll','Saved payslip '+e.name+' '+month);
+  logAct('payroll','Saved payslip '+e.name+' '+month+' — net RM '+fmt(rec.netPay));
   toast('Payslip saved','ok');
   await payLoad(true);if(rec.expenseId&&payLinkOn())await loadAll();
   $('pr-prev').innerHTML=`<div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Payslip</b><button class="btn btn-sm" onclick="payPrint('${rec.id}')"><i class="fa-solid fa-print"></i> Print / PDF</button></div>`+payDoc(rec);
@@ -4111,6 +4134,7 @@ async function payDelSlip(id){
   const{error}=await sb.from('payroll_slips').delete().eq('id',id);
   if(error){toast(error.message,'err');return;}
   if(PAY.viewId===id)PAY.viewId=null;
+  logAct('payroll','Deleted payslip '+p.employeeName+' '+p.month);
   toast('Deleted','ok');await payLoad(true);await loadAll();payHist();
 }
 /* ---------- Payslip document ---------- */
