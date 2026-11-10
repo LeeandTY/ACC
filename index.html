@@ -4150,7 +4150,8 @@ function printTax(yrParam){
 
 /* ================= PAYROLL ================= */
 const PAYCO={name:'LEE & TY TRADING',reg:'Registration No.: 202503136552 (003732259-U)',addr:'37 Jalan 2/4, Taman Bukit Permai, Taman Bukit Permai, 56100 Kuala Lumpur',epf:'EPF Employer No.: 26531900'};
-const PAY={emps:[],slips:[],loaded:false,err:'',tab:'run',editId:null,viewId:null};
+const PAY={emps:[],slips:[],loaded:false,err:'',tab:'run',editId:null,viewId:null,editSlip:null,typeOv:null};
+const payTypeNow=e=>PAY.typeOv||(e&&e.pay_type==='monthly'?'monthly':'daily');
 const payR2=n=>Math.round((Number(n)||0)*100)/100;
 const payCeil=x=>Math.ceil(Math.round(x*100)/100);
 const payM$=n=>'RM '+fmt(n);
@@ -4197,7 +4198,7 @@ async function rPay(){
   payShow(PAY.tab);
 }
 function paytab(t,btn){
-  PAY.tab=t;document.querySelectorAll('#page-pay>.tabs .tab').forEach(b=>b.classList.remove('on'));
+  PAY.tab=t;if(t!=='run'){PAY.editSlip=null;PAY.typeOv=null;}document.querySelectorAll('#page-pay>.tabs .tab').forEach(b=>b.classList.remove('on'));
   if(btn)btn.classList.add('on');
   if(PAY.loaded)payShow(t);
 }
@@ -4241,8 +4242,9 @@ function payRunForm(){
   const el=$('pay-run');
   if(!PAY.emps.length){el.innerHTML='<div class="info-box">Add an employee first (Employees tab).</div>';return;}
   const keep=$('pr-emp')?.value;
-  el.innerHTML=`<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-money-check-dollar"></i>Run payroll</span></div><div class="card-bd">
-  <div class="r2"><div class="fld"><label class="lbl">Employee</label><select class="inp" id="pr-emp" onchange="payEmpPick()">${PAY.emps.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select></div>
+  const eds=PAY.slips.find(x=>x.id===PAY.editSlip);
+  el.innerHTML=(eds?`<div class="info-box" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span><b>Editing payslip</b> — ${esc(eds.employeeName)} · ${payML(eds.month)}</span><button class="btn btn-sm" onclick="PAY.editSlip=null;PAY.typeOv=null;payRunForm()">Cancel</button></div>`:'')+`<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-money-check-dollar"></i>${eds?'Edit payslip':'Run payroll'}</span></div><div class="card-bd">
+  <div class="r2"><div class="fld"><label class="lbl">Employee</label><select class="inp" id="pr-emp" onchange="PAY.editSlip=null;PAY.typeOv=null;payRunForm()">${PAY.emps.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}</select></div>
   <div class="fld"><label class="lbl">Pay month</label><input class="inp" type="month" id="pr-month" value="${today().slice(0,7)}" onchange="paySum()"></div></div>
   <div id="pr-daily" class="r2"><div class="fld"><label class="lbl">Daily rate (RM)</label><input class="inp" type="number" step="0.01" id="pr-rate" oninput="payGross()"></div>
   <div class="fld"><label class="lbl">Days worked</label><input class="inp" type="number" step="0.5" id="pr-days" oninput="payGross()"></div></div>
@@ -4259,20 +4261,39 @@ function payRunForm(){
   </div></div><div id="pr-sum"></div>
   <button class="btn btn-pr" style="width:100%;margin-bottom:14px" onclick="paySave()"><i class="fa-solid fa-floppy-disk"></i> Save payslip</button><div id="pr-prev"></div>`;
   if(keep&&PAY.emps.some(e=>e.id===keep))$('pr-emp').value=keep;
+  if(eds)$('pr-emp').value=eds.employeeId;
   payEmpPick();
+  if(eds)payFillFrom(eds);
 }
 function payEmpPick(){
   const e=PAY.emps.find(x=>x.id===$('pr-emp').value);if(!e)return;
-  const mo=e.pay_type==='monthly';
+  const mo=payTypeNow(e)==='monthly';
   $('pr-daily').style.display=mo?'none':'grid';$('pr-monthly').style.display=mo?'grid':'none';
   if(mo)$('pr-msal').value=e.rate;else $('pr-rate').value=e.rate;
   $('pr-days').value='';$('pr-unpaid').value='0';$('pr-allow').value='0';$('pr-pcb').value='0';$('pr-prev').innerHTML='';
   payGross();
 }
+function payFillFrom(r){
+  const set=(id,v)=>{const el=$(id);if(el)el.value=v==null?'':v;};
+  set('pr-month',r.month);set('pr-allow',r.allowance||0);set('pr-pcb',r.pcb||0);
+  if(r.payType==='monthly'){set('pr-msal',r.monthlySalary);set('pr-unpaid',r.unpaidDays||0);set('pr-std',r.stdDays||26);}
+  else{set('pr-rate',r.rate);set('pr-days',r.days);}
+  $('pr-epf').checked=!!r.epfOn;$('pr-se').checked=!!r.socsoEisOn;
+  $('pr-sefields').style.display=r.socsoEisOn?'block':'none';
+  set('pr-see',r.socsoEe||0);set('pr-ser',r.socsoEr||0);set('pr-eie',r.eisEe||0);set('pr-eir',r.eisEr||0);
+  paySum();
+}
+function payEdit(id){
+  const r=PAY.slips.find(x=>x.id===id);if(!r)return;
+  if(!r.employeeId||!PAY.emps.some(e=>e.id===r.employeeId)){toast('This employee was deleted — add them again to edit','err');return;}
+  PAY.editSlip=id;PAY.typeOv=r.payType==='monthly'?'monthly':'daily';PAY.viewId=null;PAY.tab='run';
+  document.querySelectorAll('#page-pay>.tabs .tab').forEach((b,i)=>b.classList.toggle('on',i===0));
+  payShow('run');window.scrollTo(0,0);
+}
 function payInputs(){
   const e=PAY.emps.find(x=>x.id===$('pr-emp').value)||{};
   const g=id=>$(id)?.value;
-  return{type:e.pay_type==='monthly'?'monthly':'daily',rate:g('pr-rate'),days:g('pr-days'),msal:g('pr-msal'),unpaid:g('pr-unpaid'),std:g('pr-std'),allow:g('pr-allow'),
+  return{type:payTypeNow(e),rate:g('pr-rate'),days:g('pr-days'),msal:g('pr-msal'),unpaid:g('pr-unpaid'),std:g('pr-std'),allow:g('pr-allow'),
     epfOn:$('pr-epf').checked,seOn:$('pr-se').checked,see:g('pr-see'),ser:g('pr-ser'),eie:g('pr-eie'),eir:g('pr-eir'),pcb:g('pr-pcb')};
 }
 function payGross(){
@@ -4321,18 +4342,21 @@ async function paySave(){
   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)){toast('Pick the pay month','err');return;}
   const o=payInputs(),c=payCompute(o);
   if(c.gross===0&&!confirm('Gross pay is RM 0.00. Save anyway?'))return;
-  const old=PAY.slips.find(p=>p.employeeId===e.id&&p.month===month);
-  if(old&&!confirm(e.name+' already has a payslip for '+payML(month)+'. Overwrite?'))return;
-  if(!old&&!confirm('Save '+e.name+' – '+payML(month)+', net '+payM$(c.netPay)+'?'))return;
+  const editing=PAY.editSlip?PAY.slips.find(p=>p.id===PAY.editSlip):null;
+  if(editing&&PAY.slips.some(p=>p.id!==editing.id&&p.employeeId===e.id&&p.month===month)){toast('Another payslip already exists for that month','err');return;}
+  const old=editing||PAY.slips.find(p=>p.employeeId===e.id&&p.month===month);
+  if(editing){if(!confirm('Update payslip '+e.name+' – '+payML(month)+', net '+payM$(c.netPay)+'?'))return;}
+  else if(old&&!confirm(e.name+' already has a payslip for '+payML(month)+'. Overwrite?'))return;
+  else if(!old&&!confirm('Save '+e.name+' – '+payML(month)+', net '+payM$(c.netPay)+'?'))return;
   const rec={...c,employeeId:e.id,employeeName:e.name,employeeIc:e.ic,month,rate:Number(o.rate)||0,days:Number(o.days)||0,expenseId:old?.expenseId||null};
   try{
     rec.expenseId=await payExpSync(rec);
-    const r=await sb.from('payroll_slips').upsert(payRowOf(rec),{onConflict:'employee_id,month'}).select().single();
+    const r=editing?await sb.from('payroll_slips').update(payRowOf(rec)).eq('id',editing.id).select().single():await sb.from('payroll_slips').upsert(payRowOf(rec),{onConflict:'employee_id,month'}).select().single();
     if(r.error)throw r.error;
     rec.id=r.data.id;rec.savedAt=r.data.saved_at;
   }catch(err){toast(err.message||'Save failed','err');return;}
   logAct('payroll','Saved payslip '+e.name+' '+month+' — net RM '+fmt(rec.netPay));
-  toast('Payslip saved','ok');
+  toast(editing?'Payslip updated':'Payslip saved','ok');PAY.editSlip=null;PAY.typeOv=null;
   await payLoad(true);if(rec.expenseId&&payLinkOn())await loadAll();
   $('pr-prev').innerHTML=`<div class="toolbar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Payslip</b><button class="btn btn-sm" onclick="payPrint('${rec.id}')"><i class="fa-solid fa-print"></i> Print / PDF</button></div>`+payDoc(rec);
 }
@@ -4343,12 +4367,13 @@ function payHist(){
   let ls=PAY.slips.filter(p=>(!fe||p.employeeId===fe)&&(!fm||p.month===fm));
   const tn=ls.reduce((a,p)=>a+p.netPay,0),tc=ls.reduce((a,p)=>a+p.companyCost,0);
   const view=PAY.slips.find(p=>p.id===PAY.viewId);
-  $('pay-hist').innerHTML=`${view?`<div class="card"><div class="card-hd"><span class="card-ti">Payslip</span><div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="payPrint('${view.id}')"><i class="fa-solid fa-print"></i> Print</button><button class="btn btn-sm" onclick="PAY.viewId=null;payHist()">Close</button></div></div><div class="card-bd">${payDoc(view)}</div></div>`:''}
+  $('pay-hist').innerHTML=`${view?`<div class="card"><div class="card-hd"><span class="card-ti">Payslip</span><button class="btn btn-sm" onclick="PAY.viewId=null;payHist()">Close</button></div><div class="card-bd">${payDoc(view)}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn btn-pr" onclick="payEdit('${view.id}')"><i class="fa-solid fa-pen"></i> Edit</button><button class="btn" onclick="payPrint('${view.id}')"><i class="fa-solid fa-print"></i> Print / PDF</button><button class="btn" onclick="payChangeMonth('${view.id}')">Change month</button><button class="btn" onclick="payRecalcEpf('${view.id}')">Recalc EPF</button><button class="btn btn-rd" onclick="payDelSlip('${view.id}')"><i class="fa-solid fa-trash"></i> Delete</button></div></div></div>`:''}
   <div class="card"><div class="card-bd"><div class="r2"><select class="inp sm" id="ph-emp" onchange="payHist()"><option value="">All employees</option>${PAY.emps.map(e=>`<option value="${e.id}" ${e.id===fe?'selected':''}>${esc(e.name)}</option>`).join('')}</select>
   <select class="inp sm" id="ph-mon" onchange="payHist()"><option value="">All months</option>${months.map(m=>`<option value="${m}" ${m===fm?'selected':''}>${payML(m)}</option>`).join('')}</select></div></div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-clock-rotate-left"></i>Payslips (${ls.length})</span><span style="font-size:12px;color:var(--t3)">Net ${payM$(tn)} · Cost ${payM$(tc)}</span></div><div>
   ${ls.map(p=>`<div class="tx"><div class="tx-l"><div class="tx-nm">${esc(p.employeeName)} · ${payML(p.month)}</div><div class="tx-sb">Gross ${payM$(p.gross)} · Net ${payM$(p.netPay)} · Cost ${payM$(p.companyCost)}${p.expenseId?' · in Expenses':''}</div>
-  <div class="tx-acts" style="margin-top:6px;flex-wrap:wrap"><button class="btn btn-sm" onclick="PAY.viewId='${p.id}';payHist();window.scrollTo(0,0)">View</button><button class="btn btn-sm" onclick="payPrint('${p.id}')">Print</button><button class="btn btn-sm" onclick="payChangeMonth('${p.id}')">Month</button><button class="btn btn-sm" onclick="payRecalcEpf('${p.id}')">Recalc EPF</button><button class="btn btn-rd btn-sm btn-ic" onclick="payDelSlip('${p.id}')"><i class="fa-solid fa-trash"></i></button></div></div></div>`).join('')||'<div style="padding:14px;color:var(--t3);font-size:13px">No payslips yet.</div>'}</div></div>
+  <div class="tx-acts" style="margin-top:6px"><button class="btn btn-sm" onclick="PAY.viewId='${p.id}';payHist();window.scrollTo(0,0)"><i class="fa-solid fa-eye"></i> View</button></div></div></div>`).join('')||'<div style="padding:14px;color:var(--t3);font-size:13px">No payslips yet.</div>'}</div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-database"></i>Backup</span></div><div class="card-bd" style="display:flex;gap:8px;flex-wrap:wrap">
   <button class="btn" onclick="payExport()"><i class="fa-solid fa-download"></i> Export JSON</button>
   <button class="btn" onclick="$('pay-imp').click()"><i class="fa-solid fa-upload"></i> Import JSON</button><input type="file" id="pay-imp" accept=".json,application/json" style="display:none" onchange="payImport(this)"></div></div>`;
