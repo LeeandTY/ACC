@@ -4880,8 +4880,8 @@ function bkRender(){
     return`<div class="tx" style="cursor:pointer" onclick="bkOpen('${t.id}')"><div class="tx-l"><div class="tx-nm" style="font-size:13px;white-space:normal">${esc(t.description||'(no description)')}</div><div class="tx-sb">${fmtDS(t.txn_date)} · ${lb?'<span style="color:var(--grn)">✓ '+esc(lb)+'</span>':'<span style="color:var(--red)">Needs review</span>'}</div></div><div style="text-align:right">${amt}<div style="margin-top:4px"><button class="btn btn-sm" onclick="event.stopPropagation();bkOpen('${t.id}')">${lb?'Edit':'Match'}</button></div></div></div>`;};
   $('fin-bk').innerHTML=`<div class="card"><div class="card-bd"><div class="r2">
     <div class="fld" style="margin:0"><label class="lbl">Month</label><select class="inp" onchange="BK.m=this.value;bkRender()">${bkMonths().map(x=>`<option value="${x}" ${x===m?'selected':''}>${new Date(x+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</option>`).join('')}</select></div>
-    <div class="fld" style="margin:0;display:flex;align-items:flex-end"><button class="btn btn-pr" style="width:100%" onclick="$('bk-file').click()"><i class="fa-solid fa-upload"></i> Import OCBC CSV</button><input type="file" id="bk-file" accept=".csv,.txt,text/csv" style="display:none" onchange="bkPick(this)"></div></div>
-    <div style="font-size:11.5px;color:var(--t3);margin-top:8px">In OCBC online banking download the transaction history as CSV (or open the statement in Excel and Save As CSV). Importing the same file twice is safe.</div></div></div>
+    <div class="fld" style="margin:0;display:flex;align-items:flex-end"><button class="btn btn-pr" style="width:100%" onclick="$('bk-file').click()"><i class="fa-solid fa-upload"></i> Import OCBC statement</button><input type="file" id="bk-file" accept=".csv,.txt,.pdf,text/csv,application/pdf" style="display:none" onchange="bkPick(this)"></div></div>
+    <div style="font-size:11.5px;color:var(--t3);margin-top:8px">Import the OCBC statement PDF (e.g. CURRENT_ACCOUNT-…pdf) or a CSV. Importing the same file twice is safe.</div></div></div>
   <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-scale-balanced"></i>Reconciliation — ${esc(lbl)}</span>${badge}</div><div class="card-bd">
     <div class="r2"><div class="fld"><label class="lbl">Opening balance (statement)</label><input class="inp" type="number" step="0.01" id="bk-op" value="${d.opening==null?'':d.opening}" placeholder="${d.dOpen==null?'':d.dOpen}"></div>
     <div class="fld"><label class="lbl">Closing balance (statement)</label><input class="inp" type="number" step="0.01" id="bk-cl" value="${d.closing==null?'':d.closing}" placeholder="${d.dClose==null?'':d.dClose}"></div></div>
@@ -4908,6 +4908,7 @@ async function bkSaveStmt(){
 /* ---------- import ---------- */
 function bkPick(inp){
   const f=inp.files[0];inp.value='';if(!f)return;
+  if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){bkPickPdf(f);return;}
   const rd=new FileReader();rd.onload=()=>{
     try{
       const rows=bkParseCSV(rd.result);if(rows.length<2){toast('The file looks empty','err');return;}
@@ -4942,7 +4943,7 @@ function bkMapChange(){
 async function bkImport(){
   const P=BK.pend;if(!P||!P.out||!P.out.length)return;
   const btn=$('bk-go');btn.disabled=true;
-  try{localStorage.setItem('lty_bank_map',JSON.stringify({sig:P.rows[P.hdr].join('|'),map:P.map}));}catch(e){}
+  if(P.rows)try{localStorage.setItem('lty_bank_map',JSON.stringify({sig:P.rows[P.hdr].join('|'),map:P.map}));}catch(e){}
   const have=new Set(BK.txns.map(t=>t.import_key));
   const fresh=P.out.filter(t=>!have.has(t.import_key));
   for(let i=0;i<fresh.length;i+=200){
@@ -4966,6 +4967,77 @@ async function bkDelMonth(){
   const{error}=await sb.from('bank_txns').delete().gte('txn_date',BK.m+'-01').lte('txn_date',finME(BK.m));
   if(error){toast(error.message,'err');return;}
   logAct('delete','Bank lines deleted for '+BK.m+' ('+l.length+')');BK.loaded=false;await bkLoad();bkRender();
+}
+
+/* ---------- OCBC statement PDF ---------- */
+const BK_PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',BK_PDFW='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+function bkLoadPdfJs(){
+  if(window.pdfjsLib)return Promise.resolve();
+  return new Promise((ok,no)=>{const sc=document.createElement('script');sc.src=BK_PDFJS;sc.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc=BK_PDFW;ok();};sc.onerror=()=>no(new Error('Could not load the PDF reader (check internet)'));document.head.appendChild(sc);});
+}
+async function bkPdfLines(buf){
+  await bkLoadPdfJs();
+  const doc=await window.pdfjsLib.getDocument({data:buf}).promise,pages=[];
+  for(let n=1;n<=doc.numPages;n++){
+    const tc=await(await doc.getPage(n)).getTextContent(),rows=[];
+    tc.items.forEach(it=>{if(!String(it.str).trim())return;const y=it.transform[5],x=it.transform[4];let r=rows.find(q=>Math.abs(q.y-y)<2.5);if(!r){r={y,it:[]};rows.push(r);}r.it.push({x,s:it.str});});
+    rows.sort((a,b)=>b.y-a.y);
+    pages.push(rows.map(r=>({y:r.y,t:r.it.sort((a,b)=>a.x-b.x).map(i=>i.s.trim()).join(' ').replace(/\s+/g,' ').replace(/\s+([.,:])/g,'$1').replace(/([.,])\s+(?=\d)/g,'$1').replace(/\s*\/\s*/g,'/').trim()})));
+  }
+  return pages;
+}
+function bkParsePdf(pages){
+  const MON={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+  const M='(\\d{1,3}(?:,\\d{3})*\\.\\d{2})',dRe=/^(\d{2}) ([A-Z]{3}) (\d{4})\s+(.*)$/,twoRe=new RegExp('^(.*?)\\s*'+M+'\\s+'+M+'$'),bfRe=new RegExp('Balance B/F.*?'+M+'\\s*$','i');
+  const out=[],info={bad:0,wd:null,dp:null,twd:null,tdp:null,opening:null,period:''};let prev=null,cur=null;
+  pages.forEach(lines=>{
+    cur=null;let lastY=null;
+    lines.forEach(L=>{
+      const t=L.t,m=t.match(dRe),num=s=>parseFloat(s.replace(/,/g,''));
+      let mm;
+      if(mm=t.match(bfRe)){prev=num(mm[1]);if(info.opening==null)info.opening=prev;cur=null;lastY=L.y;return;}
+      if(mm=t.match(/No\. of Withdrawals\s+(\d+).*?Total Withdrawals\s+([\d,]+\.\d{2})/i)){info.wd=+mm[1];info.twd=num(mm[2]);}
+      if(mm=t.match(/No\. of Deposits\s+(\d+).*?Total Deposits\s+([\d,]+\.\d{2})/i)){info.dp=+mm[1];info.tdp=num(mm[2]);}
+      if(m&&MON[m[2]]){
+        const rest=m[4],q=rest.match(twoRe);
+        if(q&&prev!=null){
+          const amt=num(q[2]),bal=num(q[3]),delta=Math.round((bal-prev)*100)/100,debit=delta<0;
+          if(Math.abs(Math.abs(delta)-amt)>0.005)info.bad++;
+          cur={txn_date:m[3]+'-'+String(MON[m[2]]).padStart(2,'0')+'-'+m[1],description:q[1].trim(),debit:debit?amt:0,credit:debit?0:amt,balance:bal};
+          out.push(cur);prev=bal;
+        }else cur=null;
+        lastY=L.y;return;
+      }
+      if(cur&&lastY!=null&&lastY-L.y<=16&&!/^(From now|Dari sekarang|BASE LENDING|INSURANCE|If the property|Local cheques|Cek-cek|Page \d|A Member|https?:|OCBC Bank|TRANSACTION|SUMMARY|No\. of|STATEMENT|PENYATA|Account |Transaction |Tarikh )/i.test(t)){
+        lastY=L.y;if(!/^(DESC:?|\d{2}\/\d{2}\/\d{2})$/.test(t)&&!/^\d{1,3}(,\d{3})*\.\d{2}$/.test(t))cur.description=(cur.description+' · '+t).trim();}
+      else{cur=null;}
+    });
+  });
+  out.forEach(t=>{t.description=t.description.replace(/\(\s+/g,'(').replace(/\s+\)/g,')').replace(/\s+-\s+(?=\d)/g,'-').replace(/\s*'\s*/g,"'").replace(/\s+/g,' ');});
+  return{out,info};
+}
+async function bkPickPdf(f){
+  try{
+    toast('Reading PDF…','ok');
+    const pages=await bkPdfLines(await f.arrayBuffer()),{out,info}=bkParsePdf(pages);
+    if(!out.length){toast('No transactions found. Is this an OCBC statement PDF? Try the CSV instead.','err');return;}
+    const seen={};out.forEach((t,i)=>{t.seq=i;const k=[t.txn_date,t.description,t.debit,t.credit,t.balance].join('|');seen[k]=(seen[k]||0)+1;t.import_key=k+'|'+seen[k];});
+    BK.pend={out,name:f.name,pdf:info};bkPdfModal();
+  }catch(e){toast('Could not read PDF: '+e.message,'err');}
+}
+function bkPdfModal(){
+  const P=BK.pend,o=P.out,i=P.pdf,nW=o.filter(t=>t.debit>0).length,nD=o.filter(t=>t.credit>0).length,sW=payR2(o.reduce((a,t)=>a+t.debit,0)),sD=payR2(o.reduce((a,t)=>a+t.credit,0));
+  const chk=i.wd==null?null:(nW===i.wd&&nD===i.dp&&Math.abs(sW-i.twd)<0.005&&Math.abs(sD-i.tdp)<0.005&&!i.bad);
+  openM(`<div class="m-hd"><div class="m-ti">OCBC statement</div><button class="m-x" onclick="closeM()">×</button></div>
+  <div style="font-size:12px;color:var(--t3);margin-bottom:10px">${esc(P.name)}</div>
+  <div class="bs-row"><span>Lines read</span><span>${o.length} (${nW} out · ${nD} in)</span></div>
+  <div class="bs-row"><span>Period</span><span>${fmtD(o[0].txn_date)} – ${fmtD(o[o.length-1].txn_date)}</span></div>
+  <div class="bs-row"><span>Total out / in</span><span>RM ${fmt(sW)} / RM ${fmt(sD)}</span></div>
+  ${i.opening!=null?`<div class="bs-row"><span>Opening balance (B/F)</span><span>RM ${fmt(i.opening)}</span></div>`:''}
+  <div class="bs-row"><span>Closing balance</span><span>RM ${fmt(o[o.length-1].balance)}</span></div>
+  <div class="info-box" style="margin:12px 0;${chk===false?'border-left-color:var(--red)':''}">${chk===null?'The statement summary was not found, so the count could not be cross-checked.':chk?'✓ Matches the statement summary ('+i.wd+' withdrawals RM '+fmt(i.twd)+', '+i.dp+' deposits RM '+fmt(i.tdp)+').':'<b>Does not match the statement summary</b> ('+i.wd+' withdrawals RM '+fmt(i.twd)+', '+i.dp+' deposits RM '+fmt(i.tdp)+'). A line may be misread — use the CSV instead, or tell me.'}</div>
+  <div class="tw" style="margin-bottom:12px"><table class="tbl"><thead><tr><th>Date</th><th>Description</th><th class="n">Out</th><th class="n">In</th></tr></thead><tbody>${o.slice(0,5).map(t=>`<tr><td>${fmtDS(t.txn_date)}</td><td>${esc(t.description).slice(0,40)}</td><td class="n">${t.debit?fmt(t.debit):''}</td><td class="n">${t.credit?fmt(t.credit):''}</td></tr>`).join('')}</tbody></table></div>
+  <div class="btn-row"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-pr" id="bk-go" onclick="bkImport()"><i class="fa-solid fa-check"></i> Import ${o.length} lines</button></div>`);
 }
 /* ---------- match one line ---------- */
 function bkOpen(id){
