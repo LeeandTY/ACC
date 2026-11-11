@@ -599,7 +599,7 @@ html #toast::before{font-size:20px;display:block;margin-bottom:6px}
 #scanfx .sf-bar.on{display:block}
 #scanfx .sf-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5CBF92,#7FD6A8);box-shadow:0 0 10px #7FD6A8;transition:width .3s ease}
 
-#pay-run,#pay-emp,#pay-hist,#fin-pl,#fin-ar,#fin-ap,#fin-st,#fin-cn{animation:slOpen .35s ease both}
+#pay-run,#pay-emp,#pay-hist,#fin-pl,#fin-ar,#fin-ap,#fin-st,#fin-cn,#fin-bk{animation:slOpen .35s ease both}
 /* ---- Respect reduced motion ---- */
 /* =========================================================
    LIGHT THEME — colourful minimalist (dark mode untouched)
@@ -1122,13 +1122,14 @@ html:not([data-theme="dark"]) .m-ti{letter-spacing:-.2px}
 <!-- ACCOUNTS -->
 <div id="page-fin" class="page">
   <div id="fin-err"></div>
-  <div id="fin-pl"></div><div id="fin-ar" style="display:none"></div><div id="fin-ap" style="display:none"></div><div id="fin-st" style="display:none"></div><div id="fin-cn" style="display:none"></div>
+  <div id="fin-pl"></div><div id="fin-ar" style="display:none"></div><div id="fin-ap" style="display:none"></div><div id="fin-st" style="display:none"></div><div id="fin-cn" style="display:none"></div><div id="fin-bk" style="display:none"></div>
   <div class="tabs">
     <button style="min-width:0;padding:9px 5px;font-size:11.5px" class="tab on" onclick="finTabGo('pl',this)">P&amp;L / Cash</button>
     <button style="min-width:0;padding:9px 5px;font-size:11.5px" class="tab" onclick="finTabGo('ar',this)">Receivable</button>
     <button style="min-width:0;padding:9px 5px;font-size:11.5px" class="tab" onclick="finTabGo('ap',this)">Payable</button>
     <button style="min-width:0;padding:9px 5px;font-size:11.5px" class="tab" onclick="finTabGo('st',this)">Statements</button>
     <button style="min-width:0;padding:9px 5px;font-size:11.5px" class="tab" onclick="finTabGo('cn',this)">Credit notes</button>
+    <button style="min-width:0;padding:9px 5px;font-size:11.5px" class="tab" onclick="finTabGo('bk',this)">Bank</button>
   </div>
 </div>
 
@@ -4500,8 +4501,8 @@ function rFin(){
   if(!FIN.m)FIN.m=today().slice(0,7);if(!FIN.y)FIN.y=today().slice(0,4);if(!FIN.stmtM)FIN.stmtM=today().slice(0,7);
   const e=$('fin-err');
   e.innerHTML=S.finErr?`<div class="info-box" style="border-left-color:var(--red)"><b>Run finance-setup.sql once</b> in Supabase &rarr; SQL Editor to enable credit notes and supplier payables.<br><span style="opacity:.7">${esc(S.finErr)}</span></div>`:'';
-  ['pl','ar','ap','st','cn'].forEach(k=>$('fin-'+k).style.display=k===FIN.tab?'block':'none');
-  ({pl:finPL,ar:finAR,ap:finAP,st:finStmt,cn:finCN})[FIN.tab]();
+  ['pl','ar','ap','st','cn','bk'].forEach(k=>$('fin-'+k).style.display=k===FIN.tab?'block':'none');
+  ({pl:finPL,ar:finAR,ap:finAP,st:finStmt,cn:finCN,bk:rBank})[FIN.tab]();
 }
 /* ---------- P&L and cash ---------- */
 function finPeriod(f,t){
@@ -4729,6 +4730,309 @@ function cnDoc(c){
   <tr><td colspan="3" class="num">Subtotal</td><td class="num">${n(c.subtotal)}</td></tr>${Number(c.tax_amount)?`<tr><td colspan="3" class="num">Tax (${c.tax_rate}%)</td><td class="num">${n(c.tax_amount)}</td></tr>`:''}<tr class="tot"><td colspan="3" class="num"><b>Total credit</b></td><td class="num"><b>RM ${n(c.total)}</b></td></tr></tbody></table></div>`;
 }
 function cnPrint(id){const c=S.cns.find(x=>finSID(x.id)===finSID(id));if(c)finPrint('Credit note '+c.cn_number,cnDoc(c));}
+
+/* ================= BANK RECONCILIATION (OCBC CSV) ================= */
+const BK={m:'',txns:[],mm:{},loaded:false,err:'',pend:null,showMatched:false,cur:null};
+const BK_MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+const bkYMD=(y,m,d)=>{if(y<100)y+=2000;if(m<1||m>12||d<1||d>new Date(y,m,0).getDate())return null;return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');};
+function bkDate(s,fmt){
+  s=String(s==null?'':s).trim();if(!s)return null;let m;
+  if(m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/))return bkYMD(+m[1],+m[2],+m[3]);
+  if(m=s.match(/^(\d{1,2})[\s\-\/.]([A-Za-z]{3})[A-Za-z]*[\s\-\/.,]+(\d{2,4})/)){const mo=BK_MON[m[2].toLowerCase()];return mo?bkYMD(+m[3],mo,+m[1]):null;}
+  if(m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/))return fmt==='mdy'?bkYMD(+m[3],+m[1],+m[2]):bkYMD(+m[3],+m[2],+m[1]);
+  return null;
+}
+function bkNum(s){
+  if(s==null)return null;let t=String(s).trim();if(!t)return null;
+  let neg=false;if(/^\(.*\)$/.test(t)){neg=true;t=t.slice(1,-1);}
+  if(/\bDR\b\s*$/i.test(t)){neg=true;}
+  t=t.replace(/(CR|DR)\s*$/i,'').replace(/RM|MYR/ig,'').replace(/[,\s]/g,'');
+  if(t.startsWith('-')){neg=!neg;t=t.slice(1);}
+  if(t.startsWith('+'))t=t.slice(1);
+  if(!/^\d*\.?\d+$/.test(t))return null;
+  const v=parseFloat(t);return neg?-v:v;
+}
+function bkParseCSV(text){
+  text=String(text).replace(/^﻿/,'');
+  const lines=text.split(/\r?\n/).filter(l=>l.trim()).slice(0,15);
+  const cnt=(l,d)=>{let q=false,n=0;for(const ch of l){if(ch==='"')q=!q;else if(ch===d&&!q)n++;}return n;};
+  const d=[',',';','\t','|'].map(x=>[x,lines.reduce((a,l)=>a+cnt(l,x),0)]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[];let row=[],cell='',q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){if(ch==='"'){if(text[i+1]==='"'){cell+='"';i++;}else q=false;}else cell+=ch;}
+    else if(ch==='"')q=true;
+    else if(ch===d){row.push(cell);cell='';}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);cell='';if(row.some(c=>c.trim()))rows.push(row);row=[];}
+    else cell+=ch;}
+  row.push(cell);if(row.some(c=>c.trim()))rows.push(row);
+  return rows.map(r=>r.map(c=>c.trim()));
+}
+const BK_RE={date:/date|tarikh/i,desc:/descr|particular|detail|narrat|remark|transaction$|butiran/i,debit:/debit|withdraw|money out|paid out|dr$/i,credit:/credit|deposit|money in|paid in|cr$/i,amount:/^amount|^amt/i,bal:/balance|baki/i,ref:/ref|cheque|chq/i};
+function bkHeaderIdx(rows){
+  for(let i=0;i<Math.min(rows.length,40);i++){
+    const r=rows[i];let hit=0;
+    if(r.some(c=>BK_RE.date.test(c)))hit++;
+    if(r.some(c=>BK_RE.desc.test(c)&&!/date/i.test(c)))hit++;
+    if(r.some(c=>BK_RE.debit.test(c)||BK_RE.credit.test(c)||BK_RE.amount.test(c)))hit++;
+    if(r.some(c=>BK_RE.bal.test(c)))hit++;
+    if(hit>=3)return i;
+  }
+  return -1;
+}
+function bkAutoMap(h){
+  const f=(re,ex)=>{const i=h.findIndex(c=>re.test(c)&&!(ex&&ex.test(c)));return i<0?'':String(i);};
+  let date=f(/transaction date|txn date|posting date|^date/i,/value/i);if(date==='')date=f(BK_RE.date,/value/i);if(date==='')date=f(BK_RE.date);
+  const desc=f(BK_RE.desc,/date/i);
+  const debit=f(BK_RE.debit),credit=f(BK_RE.credit);
+  return{date,desc,desc2:'',debit,credit,amount:(debit===''&&credit==='')?f(BK_RE.amount):'',bal:f(BK_RE.bal),fmt:'auto'};
+}
+function bkBuild(rows,hdr,map){
+  const data=rows.slice(hdr+1),g=(r,k)=>map[k]===''||map[k]==null?'':(r[+map[k]]??'');
+  let fmt=map.fmt;
+  if(fmt==='auto'){fmt='dmy';for(const r of data){const m=String(g(r,'date')).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.]\d{2,4}/);if(m){if(+m[2]>12){fmt='mdy';break;}if(+m[1]>12){fmt='dmy';break;}}}}
+  const out=[];
+  data.forEach(r=>{
+    const date=bkDate(g(r,'date'),fmt);if(!date)return;
+    let debit=0,credit=0;
+    if(map.amount!==''&&map.amount!=null){const raw=String(g(r,'amount')),n=bkNum(raw);if(n==null)return;if(n<0||/DR\s*$/i.test(raw))debit=Math.abs(n);else credit=n;}
+    else{const dn=bkNum(g(r,'debit')),cn=bkNum(g(r,'credit'));debit=Math.abs(dn||0);credit=Math.abs(cn||0);}
+    if(!debit&&!credit)return;
+    const bal=map.bal===''||map.bal==null?null:bkNum(g(r,'bal'));
+    const desc=[g(r,'desc'),g(r,'desc2')].map(x=>String(x).replace(/\s+/g,' ').trim()).filter(Boolean).join(' · ');
+    out.push({txn_date:date,description:desc,debit:payR2(debit),credit:payR2(credit),balance:bal==null?null:payR2(bal)});
+  });
+  if(out.length>1&&out[0].txn_date>out[out.length-1].txn_date)out.reverse();
+  const seen={};
+  out.forEach((t,i)=>{t.seq=i;const k=[t.txn_date,t.description,t.debit,t.credit,t.balance].join('|');seen[k]=(seen[k]||0)+1;t.import_key=k+'|'+seen[k];});
+  return out;
+}
+/* ---------- load / data ---------- */
+async function bkLoad(force){
+  if(BK.loaded&&!force)return;
+  let all=[],from=0;
+  for(;;){
+    const r=await sb.from('bank_txns').select('*').order('txn_date',{ascending:true}).range(from,from+999);
+    if(r.error){BK.err=r.error.message;BK.loaded=false;return;}
+    all=all.concat(r.data||[]);if(!r.data||r.data.length<1000)break;from+=1000;
+  }
+  const m=await sb.from('bank_months').select('*');
+  if(m.error){BK.err=m.error.message;BK.loaded=false;return;}
+  BK.err='';BK.txns=all.map(t=>({...t,debit:Number(t.debit||0),credit:Number(t.credit||0),balance:t.balance==null?null:Number(t.balance)}));
+  BK.txns.sort((a,b)=>a.txn_date.localeCompare(b.txn_date)||(a.seq||0)-(b.seq||0));
+  BK.mm={};(m.data||[]).forEach(x=>BK.mm[x.month]=x);BK.loaded=true;
+}
+function bkItems(){
+  const it=[],dy=(d)=>d;
+  (S.pays||[]).forEach(p=>{const inv=S.invs.find(i=>String(i.id)===String(p.invoice_id)),a=Number(p.amount)||0;
+    it.push({t:'payment',id:String(p.id),d:p.payment_date,a:Math.abs(a),dir:a>=0?'cr':'dr',tol:5,label:(a<0?'Refund ':'Payment ')+(inv?inv.invoice_number+' · '+(inv.client?.name||''):'')+(p.method?' ('+p.method+')':'')});});
+  S.purch.forEach(p=>{const a=Number(p.amount)||0;if(!a)return;it.push({t:'purchase',id:String(p.id),d:p.entry_date,a:Math.abs(a),dir:a>0?'dr':'cr',tol:5,label:'Purchase · '+(p.supplier_name||'?')});});
+  S.exps.forEach(e=>{const a=Number(e.amount)||0;if(!a)return;it.push({t:'expense',id:String(e.id),d:e.entry_date,a:Math.abs(a),dir:a>0?'dr':'cr',tol:5,label:'Expense · '+(e.category||'')+' · '+(e.description||'')});});
+  ((typeof PAY!=='undefined'&&PAY.slips)||[]).forEach(s=>it.push({t:'payroll',id:String(s.id),d:payMonthEnd(s.month),a:Number(s.netPay)||0,dir:'dr',tol:20,label:'Payroll · '+s.employeeName+' · '+s.month}));
+  return it;
+}
+const bkUsed=(extra)=>{const u=new Set((extra||[]).map(x=>x));BK.txns.forEach(t=>{if(t.match_type&&t.match_id)u.add(t.match_type+':'+t.match_id);});return u;};
+function bkAuto(list){
+  const items=bkItems(),used=bkUsed(),res=[];
+  list.filter(t=>!t.match_type).sort((a,b)=>a.txn_date.localeCompare(b.txn_date)).forEach(t=>{
+    const dir=t.credit>0?'cr':'dr',amt=t.credit>0?t.credit:t.debit;let best=null,bd=1e9;
+    items.forEach(i=>{if(i.dir!==dir||Math.abs(i.a-amt)>0.005||used.has(i.t+':'+i.id))return;const dd=Math.abs(finDays(i.d,t.txn_date));if(dd<=i.tol&&dd<bd){best=i;bd=dd;}});
+    if(best){used.add(best.t+':'+best.id);res.push({id:t.id,match_type:best.t,match_id:best.id});}
+  });
+  return res;
+}
+async function bkApply(updates){for(const u of updates){await sb.from('bank_txns').update({match_type:u.match_type,match_id:u.match_id}).eq('id',u.id);}}
+const bkLbl=t=>{
+  if(!t.match_type)return null;
+  if(t.match_type==='other')return t.note||'Other';
+  if(t.match_type==='ignore')return 'Ignored'+(t.note?' · '+t.note:'');
+  if(t.match_type==='payable'){const b=(S.pbl||[]).find(x=>String(x.id)===String(t.match_id)),p=b&&S.purch.find(x=>String(x.id)===String(b.purchase_id));return 'Supplier bill · '+(p?.supplier_name||'?');}
+  const it=bkItems().find(i=>i.t===t.match_type&&i.id===String(t.match_id));return it?it.label:(t.match_type+' (record removed)');
+};
+function bkMonthData(m){
+  const list=BK.txns.filter(t=>t.txn_date.slice(0,7)===m);
+  const cin=payR2(list.reduce((a,t)=>a+t.credit,0)),cout=payR2(list.reduce((a,t)=>a+t.debit,0));
+  const f=list.find(t=>t.balance!=null),l=[...list].reverse().find(t=>t.balance!=null);
+  const dOpen=f?payR2(f.balance-f.credit+f.debit):null,dClose=l?l.balance:null;
+  const man=BK.mm[m]||{};
+  const opening=man.opening!=null?Number(man.opening):dOpen,closing=man.closing!=null?Number(man.closing):dClose;
+  const exp=opening==null?null:payR2(opening+cin-cout),diff=(exp==null||closing==null)?null:payR2(closing-exp);
+  const un=list.filter(t=>!t.match_type);
+  const used=bkUsed();
+  const notBank=(S.pays||[]).filter(p=>String(p.method||'').toLowerCase()==='transfer'&&Number(p.amount)!==0&&String(p.payment_date).slice(0,7)===m&&!used.has('payment:'+p.id));
+  return{list,cin,cout,opening,closing,dOpen,dClose,exp,diff,un,unIn:payR2(un.reduce((a,t)=>a+t.credit,0)),unOut:payR2(un.reduce((a,t)=>a+t.debit,0)),notBank};
+}
+/* ---------- tab ---------- */
+async function rBank(){
+  const el=$('fin-bk');if(!BK.m)BK.m=today().slice(0,7);
+  el.innerHTML='<div style="padding:20px;color:var(--t3);font-size:13px">Loading…</div>';
+  await bkLoad();
+  try{if(typeof PAY!=='undefined'&&!PAY.loaded)await payLoad();}catch(e){}
+  if(BK.err){el.innerHTML=`<div class="info-box" style="border-left-color:var(--red)"><b>Run bank-setup.sql once</b> in Supabase &rarr; SQL Editor to enable bank reconciliation.<br><span style="opacity:.7">${esc(BK.err)}</span><br><button class="btn btn-sm" style="margin-top:8px" onclick="BK.loaded=false;rBank()">Retry</button></div>`;return;}
+  bkRender();
+}
+function bkMonths(){const s=new Set(BK.txns.map(t=>t.txn_date.slice(0,7)));s.add(BK.m);return [...s].sort().reverse();}
+function bkRender(){
+  const m=BK.m,d=bkMonthData(m),lbl=new Date(m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const ok=d.diff!=null&&Math.abs(d.diff)<0.005,allm=d.list.length>0&&d.un.length===0;
+  const badge=d.diff==null?'<span class="badge b-draft">Enter balances</span>':ok?'<span class="badge b-paid">Balanced</span>':'<span class="badge b-unpaid">Difference</span>';
+  const r=(a,b,c)=>`<div class="bs-row ${c||''}"><span>${a}</span><span>${b}</span></div>`;
+  const row=t=>{const lb=bkLbl(t),amt=t.credit>0?`<span style="color:var(--grn);font-weight:700">+${fmt(t.credit)}</span>`:`<span style="color:var(--red);font-weight:700">-${fmt(t.debit)}</span>`;
+    return`<div class="tx" style="cursor:pointer" onclick="bkOpen('${t.id}')"><div class="tx-l"><div class="tx-nm" style="font-size:13px;white-space:normal">${esc(t.description||'(no description)')}</div><div class="tx-sb">${fmtDS(t.txn_date)} · ${lb?'<span style="color:var(--grn)">✓ '+esc(lb)+'</span>':'<span style="color:var(--red)">Needs review</span>'}</div></div><div style="text-align:right">${amt}<div style="margin-top:4px"><button class="btn btn-sm" onclick="event.stopPropagation();bkOpen('${t.id}')">${lb?'Edit':'Match'}</button></div></div></div>`;};
+  $('fin-bk').innerHTML=`<div class="card"><div class="card-bd"><div class="r2">
+    <div class="fld" style="margin:0"><label class="lbl">Month</label><select class="inp" onchange="BK.m=this.value;bkRender()">${bkMonths().map(x=>`<option value="${x}" ${x===m?'selected':''}>${new Date(x+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</option>`).join('')}</select></div>
+    <div class="fld" style="margin:0;display:flex;align-items:flex-end"><button class="btn btn-pr" style="width:100%" onclick="$('bk-file').click()"><i class="fa-solid fa-upload"></i> Import OCBC CSV</button><input type="file" id="bk-file" accept=".csv,.txt,text/csv" style="display:none" onchange="bkPick(this)"></div></div>
+    <div style="font-size:11.5px;color:var(--t3);margin-top:8px">In OCBC online banking download the transaction history as CSV (or open the statement in Excel and Save As CSV). Importing the same file twice is safe.</div></div></div>
+  <div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-scale-balanced"></i>Reconciliation — ${esc(lbl)}</span>${badge}</div><div class="card-bd">
+    <div class="r2"><div class="fld"><label class="lbl">Opening balance (statement)</label><input class="inp" type="number" step="0.01" id="bk-op" value="${d.opening==null?'':d.opening}" placeholder="${d.dOpen==null?'':d.dOpen}"></div>
+    <div class="fld"><label class="lbl">Closing balance (statement)</label><input class="inp" type="number" step="0.01" id="bk-cl" value="${d.closing==null?'':d.closing}" placeholder="${d.dClose==null?'':d.dClose}"></div></div>
+    <button class="btn btn-sm" style="margin-bottom:10px" onclick="bkSaveStmt()">Save balances</button>
+    ${r('Opening balance',d.opening==null?'–':'RM '+fmt(d.opening))}${r('Money in ('+d.list.filter(t=>t.credit>0).length+')','+RM '+fmt(d.cin))}${r('Money out ('+d.list.filter(t=>t.debit>0).length+')','-RM '+fmt(d.cout))}
+    ${r('<b>Expected closing</b>',d.exp==null?'–':'<b>RM '+fmt(d.exp)+'</b>','total')}${r('Statement closing',d.closing==null?'–':'RM '+fmt(d.closing))}
+    ${r('<b>Difference</b>',d.diff==null?'–':'<b style="color:'+(ok?'var(--grn)':'var(--red)')+'">RM '+fmt(d.diff)+'</b>','grand')}
+    ${d.diff!=null&&!ok?'<div class="info-box" style="margin-top:10px;border-left-color:var(--red)">The imported lines do not add up to the statement balance. A line may be missing from the CSV — import the full month again.</div>':''}
+    <div style="height:10px"></div>
+    ${r('Lines matched to your records',d.list.length-d.un.length+' of '+d.list.length)}${r('Still to review',d.un.length?'<span style="color:var(--red)">'+d.un.length+' (in RM '+fmt(d.unIn)+' · out RM '+fmt(d.unOut)+')</span>':'<span style="color:var(--grn)">None</span>')}
+    ${allm&&ok?'<div class="info-box" style="margin-top:10px">All lines are matched and the bank balance agrees. This month is reconciled.</div>':''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-sm" onclick="bkAutoAll()"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-match</button><button class="btn btn-sm" onclick="bkReport()"><i class="fa-solid fa-print"></i> Print report</button><button class="btn btn-rd btn-sm" onclick="bkDelMonth()"><i class="fa-solid fa-trash"></i> Delete month's lines</button></div></div></div>
+  ${d.list.length?'':'<div class="card"><div class="card-bd" style="color:var(--t3);font-size:13px">No bank lines for this month yet. Import your OCBC CSV above.</div></div>'}
+  ${d.un.length?`<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-triangle-exclamation"></i>To review (${d.un.length})</span></div><div>${d.un.map(row).join('')}</div></div>`:''}
+  ${d.notBank.length?`<div class="card"><div class="card-hd"><span class="card-ti"><i class="fa-solid fa-circle-question"></i>Recorded as transfer, not on bank (${d.notBank.length})</span></div><div>${d.notBank.map(p=>{const inv=S.invs.find(i=>String(i.id)===String(p.invoice_id));return`<div class="tx"><div class="tx-l"><div class="tx-nm" style="font-size:13px">${esc(inv?inv.invoice_number+' · '+(inv.client?.name||''):'Payment')}</div><div class="tx-sb">${fmtDS(p.payment_date)} · check the amount or date, or whether it was really cash</div></div><div class="tx-am">RM ${fmt(p.amount)}</div></div>`;}).join('')}</div></div>`:''}
+  ${d.list.length-d.un.length?`<div class="card"><div class="card-hd" style="cursor:pointer" onclick="BK.showMatched=!BK.showMatched;bkRender()"><span class="card-ti"><i class="fa-solid fa-circle-check"></i>Matched (${d.list.length-d.un.length}) ${BK.showMatched?'▾':'▸'}</span></div>${BK.showMatched?'<div>'+d.list.filter(t=>t.match_type).map(row).join('')+'</div>':''}</div>`:''}`;
+}
+async function bkSaveStmt(){
+  const o=$('bk-op').value,c=$('bk-cl').value;
+  const{error}=await sb.from('bank_months').upsert({month:BK.m,opening:o===''?null:Number(o),closing:c===''?null:Number(c)},{onConflict:'month'});
+  if(error){toast(error.message,'err');return;}
+  toast('Saved','ok');BK.loaded=false;await bkLoad();bkRender();
+}
+/* ---------- import ---------- */
+function bkPick(inp){
+  const f=inp.files[0];inp.value='';if(!f)return;
+  const rd=new FileReader();rd.onload=()=>{
+    try{
+      const rows=bkParseCSV(rd.result);if(rows.length<2){toast('The file looks empty','err');return;}
+      let hdr=bkHeaderIdx(rows),saved=null;
+      try{saved=JSON.parse(localStorage.getItem('lty_bank_map')||'null');}catch(e){}
+      if(hdr<0)hdr=0;
+      const map=bkAutoMap(rows[hdr]);
+      if(saved&&saved.sig===rows[hdr].join('|')){Object.assign(map,saved.map);}
+      BK.pend={rows,hdr,map,name:f.name};bkMapModal();
+    }catch(e){toast('Could not read file: '+e.message,'err');}
+  };rd.readAsText(f);
+}
+function bkMapModal(){
+  const P=BK.pend,h=P.rows[P.hdr],cols=h.map((c,i)=>`<option value="${i}">${esc(c||'Column '+(i+1))}</option>`).join('');
+  const sel=(k,l,opt)=>`<div class="fld"><label class="lbl">${l}</label><select class="inp" id="bm-${k}" onchange="bkMapChange()"><option value="">— none —</option>${cols}</select></div>`;
+  openM(`<div class="m-hd"><div class="m-ti">Check the columns</div><button class="m-x" onclick="closeM()">×</button></div>
+  <div style="font-size:12px;color:var(--t3);margin-bottom:10px">${esc(P.name)} · ${P.rows.length-P.hdr-1} rows. Pick which column is which; the preview below must look right.</div>
+  <div class="r2">${sel('date','Date')}${sel('desc','Description')}</div><div class="r2">${sel('debit','Money out (debit / withdrawal)')}${sel('credit','Money in (credit / deposit)')}</div>
+  <div class="r2">${sel('amount','OR one Amount column (negative = out)')}${sel('bal','Balance')}</div><div class="r2">${sel('desc2','More description (optional)')}
+  <div class="fld"><label class="lbl">Date format</label><select class="inp" id="bm-fmt" onchange="bkMapChange()"><option value="auto">Auto</option><option value="dmy">Day / Month / Year</option><option value="mdy">Month / Day / Year</option></select></div></div>
+  <div id="bk-prev" class="tw" style="margin-bottom:12px"></div>
+  <div class="btn-row"><button class="btn" onclick="closeM()">Cancel</button><button class="btn btn-pr" id="bk-go" onclick="bkImport()"><i class="fa-solid fa-check"></i> Import</button></div>`);
+  ['date','desc','desc2','debit','credit','amount','bal'].forEach(k=>{$('bm-'+k).value=P.map[k]==null?'':P.map[k];});$('bm-fmt').value=P.map.fmt||'auto';
+  bkMapChange();
+}
+function bkMapChange(){
+  const P=BK.pend;['date','desc','desc2','debit','credit','amount','bal'].forEach(k=>P.map[k]=$('bm-'+k).value);P.map.fmt=$('bm-fmt').value;
+  const out=bkBuild(P.rows,P.hdr,P.map);P.out=out;
+  $('bk-prev').innerHTML=out.length?`<table class="tbl"><thead><tr><th>Date</th><th>Description</th><th class="n">Out</th><th class="n">In</th><th class="n">Balance</th></tr></thead><tbody>${out.slice(0,5).map(t=>`<tr><td>${fmtDS(t.txn_date)}</td><td>${esc(t.description).slice(0,40)}</td><td class="n">${t.debit?fmt(t.debit):''}</td><td class="n">${t.credit?fmt(t.credit):''}</td><td class="n">${t.balance==null?'':fmt(t.balance)}</td></tr>`).join('')}</tbody></table><div style="font-size:12px;margin-top:6px;color:var(--t2)">${out.length} lines · ${fmtD(out[0].txn_date)} to ${fmtD(out[out.length-1].txn_date)} · in RM ${fmt(out.reduce((a,t)=>a+t.credit,0))} · out RM ${fmt(out.reduce((a,t)=>a+t.debit,0))}</div>`:'<div class="info-box" style="border-left-color:var(--red)">No lines found yet — pick the Date column and either Money out / Money in or Amount.</div>';
+  $('bk-go').disabled=!out.length;
+}
+async function bkImport(){
+  const P=BK.pend;if(!P||!P.out||!P.out.length)return;
+  const btn=$('bk-go');btn.disabled=true;
+  try{localStorage.setItem('lty_bank_map',JSON.stringify({sig:P.rows[P.hdr].join('|'),map:P.map}));}catch(e){}
+  const have=new Set(BK.txns.map(t=>t.import_key));
+  const fresh=P.out.filter(t=>!have.has(t.import_key));
+  for(let i=0;i<fresh.length;i+=200){
+    const{error}=await sb.from('bank_txns').upsert(fresh.slice(i,i+200).map(t=>({...t,user_id:S.user.id})),{onConflict:'import_key',ignoreDuplicates:true});
+    if(error){btn.disabled=false;toast(/bank_txns|relation|schema cache/i.test(error.message)?'Run bank-setup.sql in Supabase first':error.message,'err');return;}
+  }
+  BK.loaded=false;await bkLoad();
+  const nu=BK.txns.filter(t=>!t.match_type&&fresh.some(f=>f.import_key===t.import_key));
+  const au=bkAuto(nu);await bkApply(au);BK.loaded=false;await bkLoad();
+  const mo=P.out.map(t=>t.txn_date.slice(0,7));BK.m=mo.sort().pop();
+  logAct('create','Bank statement imported: '+fresh.length+' new lines ('+(P.out.length-fresh.length)+' already there), '+au.length+' auto-matched');
+  closeM();toast(fresh.length+' lines imported, '+au.length+' auto-matched','ok');bkRender();
+}
+async function bkAutoAll(){
+  const au=bkAuto(BK.txns);if(!au.length){toast('Nothing new to match','ok');return;}
+  await bkApply(au);BK.loaded=false;await bkLoad();toast(au.length+' lines matched','ok');bkRender();
+}
+async function bkDelMonth(){
+  const l=BK.txns.filter(t=>t.txn_date.slice(0,7)===BK.m);if(!l.length)return;
+  if(!confirm('Delete all '+l.length+' bank lines for '+BK.m+'? Your invoices, payments and expenses are not touched. You can import the CSV again.'))return;
+  const{error}=await sb.from('bank_txns').delete().gte('txn_date',BK.m+'-01').lte('txn_date',finME(BK.m));
+  if(error){toast(error.message,'err');return;}
+  logAct('delete','Bank lines deleted for '+BK.m+' ('+l.length+')');BK.loaded=false;await bkLoad();bkRender();
+}
+/* ---------- match one line ---------- */
+function bkOpen(id){
+  const t=BK.txns.find(x=>String(x.id)===String(id));if(!t)return;BK.cur=t;
+  const cr=t.credit>0,amt=cr?t.credit:t.debit,used=bkUsed();
+  const cand=bkItems().filter(i=>i.dir===(cr?'cr':'dr')&&!used.has(i.t+':'+i.id)&&Math.abs(finDays(i.d,t.txn_date))<=(i.t==='payroll'?45:60))
+    .sort((a,b)=>(Math.abs(a.a-amt)-Math.abs(b.a-amt))||(Math.abs(finDays(a.d,t.txn_date))-Math.abs(finDays(b.d,t.txn_date)))).slice(0,40);
+  const invs=S.invs.filter(i=>i.status!=='draft'&&invBal(i)>0.004).sort((a,b)=>Math.abs(invBal(a)-amt)-Math.abs(invBal(b)-amt)).slice(0,60);
+  const pb=finApData(today()).flatMap(r=>r.bills);
+  const cur=bkLbl(t);
+  const blk=(ti,body)=>`<div style="border:1px solid var(--bdr);border-radius:var(--rs);padding:12px;margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px">${ti}</div>${body}</div>`;
+  openM(`<div class="m-hd"><div class="m-ti">Match bank line</div><button class="m-x" onclick="closeM()">×</button></div>
+  <div style="background:var(--surf);border-radius:var(--rs);padding:12px 14px;margin-bottom:12px"><div style="font-size:13px;font-weight:700;color:var(--t1)">${esc(t.description||'(no description)')}</div><div style="display:flex;justify-content:space-between;margin-top:4px;font-size:12px;color:var(--t3)"><span>${fmtD(t.txn_date)}</span><b style="font-size:16px;color:${cr?'var(--grn)':'var(--red)'}">${cr?'+':'-'}RM ${fmt(amt)}</b></div></div>
+  ${cur?`<div class="info-box" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>✓ ${esc(cur)}</span><button class="btn btn-sm" onclick="bkUnmatch()">Unlink</button></div>`:''}
+  ${blk('Link to an existing record',cand.length?`<select class="inp" id="bk-ex">${cand.map(i=>`<option value="${i.t}|${i.id}">${fmtDS(i.d)} · RM ${fmt(i.a)} · ${esc(i.label)}${Math.abs(i.a-amt)>0.005?' (differs RM '+fmt(Math.abs(i.a-amt))+')':''}</option>`).join('')}</select><button class="btn btn-pr btn-sm" style="margin-top:8px" onclick="bkLinkEx()">Link</button>`:'<div style="font-size:12px;color:var(--t3)">No unmatched records nearby.</div>')}
+  ${cr?blk('Customer paid an invoice — record the payment',invs.length?`<select class="inp" id="bk-inv">${invs.map(i=>`<option value="${i.id}">${esc(i.invoice_number)} · ${esc(i.client?.name||'')} · balance RM ${fmt(invBal(i))}</option>`).join('')}</select><button class="btn btn-pr btn-sm" style="margin-top:8px" onclick="bkNewPay()">Record payment RM ${fmt(amt)} (transfer)</button>`:'<div style="font-size:12px;color:var(--t3)">No invoices with a balance.</div>'):
+   blk('Not recorded yet — add as an expense',`<div class="r2"><select class="inp" id="bk-cat">${S.cfg.expCats.map(c=>`<option>${esc(c)}</option>`).join('')}</select><input class="inp" id="bk-ed" value="${esc((t.description||'').slice(0,60))}" placeholder="Description"></div><button class="btn btn-pr btn-sm" style="margin-top:8px" onclick="bkNewExp()">Add expense RM ${fmt(amt)}</button>`)}
+  ${!cr&&pb.length?blk('Paying a supplier bill',`<select class="inp" id="bk-pb">${pb.map(x=>`<option value="${x.b.id}">${esc(x.p.supplier_name||'?')} · ${fmtDS(x.p.entry_date)} · owe RM ${fmt(x.out)}</option>`).join('')}</select><button class="btn btn-pr btn-sm" style="margin-top:8px" onclick="bkPayBill()">Record payment RM ${fmt(amt)}</button>`):''}
+  ${blk('Something else',`<div style="display:flex;gap:6px;flex-wrap:wrap">${(cr?['Owner / capital in','Other income','Transfer between accounts']:['Owner drawing','Bank charges','Transfer between accounts','EPF / SOCSO / tax payment']).map(x=>`<button class="btn btn-sm" onclick="bkMark('other','${x}')">${x}</button>`).join('')}<button class="btn btn-sm" onclick="bkMark('ignore','')">Ignore</button></div>`)}`);
+}
+async function bkSet(id,type,mid,note){
+  const{error}=await sb.from('bank_txns').update({match_type:type,match_id:mid,note:note||null}).eq('id',id);
+  if(error){toast(error.message,'err');return false;}return true;
+}
+async function bkDone(msg){closeM();BK.loaded=false;await bkLoad();toast(msg,'ok');bkRender();}
+async function bkLinkEx(){const t=BK.cur,[ty,id]=$('bk-ex').value.split('|');if(await bkSet(t.id,ty,id,null))bkDone('Linked');}
+async function bkUnmatch(){const t=BK.cur;if(await bkSet(t.id,null,null,null))bkDone('Unlinked');}
+async function bkMark(ty,note){const t=BK.cur;if(await bkSet(t.id,ty,null,note)){logAct('edit','Bank line marked '+(note||ty)+': RM '+fmt(t.credit||t.debit));bkDone('Saved');}}
+async function bkNewPay(){
+  const t=BK.cur,iid=$('bk-inv').value,inv=S.invs.find(i=>String(i.id)===String(iid));if(!inv)return;
+  if(t.credit>invBal(inv)+0.005&&!confirm('RM '+fmt(t.credit)+' is more than the invoice balance (RM '+fmt(invBal(inv))+'). Record anyway?'))return;
+  const r=await sb.from('invoice_payments').insert({invoice_id:iid,payment_date:t.txn_date,amount:t.credit,method:'transfer',notes:'From OCBC statement'}).select('id').single();
+  if(r.error){toast(r.error.message,'err');return;}
+  const np=(inv._paid||0)+(inv._credit||0)+t.credit;await sb.from('invoices').update({status:np>=Number(inv.total)-0.005?'paid':'partial'}).eq('id',iid);
+  if(!await bkSet(t.id,'payment',String(r.data.id),null))return;
+  logAct('payment','Payment RM '+fmt(t.credit)+' (bank) on '+inv.invoice_number);await loadAll();bkDone('Payment recorded');
+}
+async function bkNewExp(){
+  const t=BK.cur,cat=$('bk-cat').value,ds=$('bk-ed').value.trim()||'Bank payment';
+  const r=await sb.from('expenses').insert({user_id:S.user.id,entry_date:t.txn_date,category:cat,description:ds,amount:t.debit,notes:'From OCBC statement'}).select('id').single();
+  if(r.error){toast(r.error.message,'err');return;}
+  if(!await bkSet(t.id,'expense',String(r.data.id),null))return;
+  logAct('create','Expense from bank: '+ds+' — RM '+fmt(t.debit));await loadAll();bkDone('Expense added');
+}
+async function bkPayBill(){
+  const t=BK.cur,id=$('bk-pb').value,b=S.pbl.find(x=>String(x.id)===String(id)),p=b&&S.purch.find(x=>String(x.id)===String(b.purchase_id));if(!p)return;
+  const out=payR2(Number(p.amount)-Number(b.paid_amount||0)),pay=Math.min(t.debit,out);
+  const u=await sb.from('supplier_payables').update({paid_amount:payR2(Number(b.paid_amount||0)+pay)}).eq('id',id);
+  if(u.error){toast(u.error.message,'err');return;}
+  if(!await bkSet(t.id,'payable',String(id),null))return;
+  logAct('payment','Paid supplier (bank) '+(p.supplier_name||'?')+' RM '+fmt(pay));await loadAll();bkDone('Supplier bill updated');
+}
+/* ---------- report ---------- */
+function bkReport(){
+  const m=BK.m,d=bkMonthData(m),lbl=new Date(m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'}),n=v=>v==null?'–':fmt(v);
+  const ln=t=>`<tr><td>${fmtDS(t.txn_date)}</td><td>${esc(t.description)}</td><td class="num">${t.debit?fmt(t.debit):''}</td><td class="num">${t.credit?fmt(t.credit):''}</td><td>${esc(bkLbl(t)||'NOT MATCHED')}</td></tr>`;
+  const html=`<div class="fin-doc"><div class="fd-co">${esc(S.cfg.company||'')}</div><div class="fd-sub">Bank: OCBC</div><div class="fd-ti">BANK RECONCILIATION — ${esc(lbl).toUpperCase()}</div>
+  <table><tbody><tr><td>Opening balance</td><td class="num">${n(d.opening)}</td></tr><tr><td>Add: money in</td><td class="num">${fmt(d.cin)}</td></tr><tr><td>Less: money out</td><td class="num">${fmt(d.cout)}</td></tr>
+  <tr class="tot"><td><b>Expected closing balance</b></td><td class="num"><b>${n(d.exp)}</b></td></tr><tr><td>Closing balance per bank statement</td><td class="num">${n(d.closing)}</td></tr>
+  <tr class="tot"><td><b>Difference</b></td><td class="num"><b>${n(d.diff)}</b></td></tr></tbody></table>
+  <p style="margin:10px 0 4px"><b>Lines:</b> ${d.list.length} · matched ${d.list.length-d.un.length} · not matched ${d.un.length}</p>
+  ${d.un.length?`<p style="margin:10px 0 4px"><b>Not matched</b></p><table><thead><tr><th>Date</th><th>Description</th><th class="num">Out</th><th class="num">In</th><th>Status</th></tr></thead><tbody>${d.un.map(ln).join('')}</tbody></table>`:''}
+  ${d.notBank.length?`<p style="margin:10px 0 4px"><b>Recorded as transfer but not on the bank statement</b></p><table><tbody>${d.notBank.map(p=>`<tr><td>${fmtDS(p.payment_date)}</td><td>Payment ${esc((S.invs.find(i=>String(i.id)===String(p.invoice_id))||{}).invoice_number||'')}</td><td class="num">${fmt(p.amount)}</td></tr>`).join('')}</tbody></table>`:''}
+  <p style="margin:10px 0 4px"><b>All lines</b></p><table><thead><tr><th>Date</th><th>Description</th><th class="num">Out</th><th class="num">In</th><th>Matched to</th></tr></thead><tbody>${d.list.map(ln).join('')}</tbody></table>
+  <div style="margin-top:26px;display:flex;justify-content:space-between"><div>Prepared by: ______________</div><div>Checked by: ______________</div></div></div>`;
+  injectFinCss();finPrint('Bank reconciliation '+m,html);
+}
 
 document.addEventListener('DOMContentLoaded',()=>{
   applyTheme();
