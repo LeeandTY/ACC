@@ -1312,6 +1312,8 @@ const S={
 };
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+/* For text placed inside '...' in an inline handler (onclick="f('${jsq(x)}')"): escape for JS first, then for HTML. */
+const jsq=s=>esc(String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r/g,'\\r').replace(/\n/g,'\\n').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029'));
 const fmt=n=>Number(n??0).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
 const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const today=()=>ymd(new Date());
@@ -1399,13 +1401,13 @@ function rProdNames(){
       <div style="font-size:11px;color:var(--t3);margin-bottom:8px">These were typed or scanned but match no master product, so they will not tally in reports.</div>
       ${um.map(u=>{
         const s=suggestMaster(u.name);
-        const safe=esc(u.name).replace(/'/g,'&#39;');
+        const safe=jsq(u.name);
         return `<div style="padding:8px 0;border-top:1px solid var(--bdr)">
           <div style="font-weight:600;font-size:13px">${esc(u.name)}</div>
           <div style="font-size:11px;color:var(--t3);margin-bottom:5px">${u.n} record${u.n>1?'s':''} · ${[...u.src].join(' + ')}${u.uom?' · '+esc(u.uom):''}${s?` · suggests <b>${esc(s.name)}</b>`:''}</div>
           <div style="display:flex;gap:5px">
             <button class="btn btn-sm" onclick="mapUnmapped('${safe}')"><i class="fa-solid fa-link"></i> Map</button>
-            <button class="btn btn-sm" onclick="newFromUnmapped('${safe}','${esc(u.uom)}')"><i class="fa-solid fa-plus"></i> New product</button>
+            <button class="btn btn-sm" onclick="newFromUnmapped('${safe}','${jsq(u.uom)}')"><i class="fa-solid fa-plus"></i> New product</button>
           </div></div>`;
       }).join('')}
     </div>`;
@@ -2509,7 +2511,7 @@ function rSH(){
       const k=dupKeys[s.entry_date+'|'+(s.customer_name||'')];
       html+=`<div style="background:var(--brl);border:1px solid var(--br);border-radius:var(--rs);padding:8px 10px;margin:-4px 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="font-size:11px;color:var(--br);font-weight:600"><i class="fa-solid fa-layer-group" style="margin-right:5px"></i>${k} records for ${esc(s.customer_name||'?')} on this day</div>
-        <button class="btn btn-sm" onclick="mergeSales('${s.entry_date}','${esc(s.customer_name||'').replace(/'/g,'&#39;')}')">Merge</button>
+        <button class="btn btn-sm" onclick="mergeSales('${s.entry_date}','${jsq(s.customer_name||'')}')">Merge</button>
       </div>`;
     }
   });
@@ -3028,7 +3030,7 @@ function rRecon(){
         <div style="font-size:11px;color:var(--t3)">Bought ${r.bought}${r.bUom?' '+esc(r.bUom):''} · Sold ${r.sold}${r.sUom?' '+esc(r.sUom):''}</div>
       </div>
       ${tag==='unsold'?`<div style="display:flex;gap:4px;flex-shrink:0">
-        <button class="btn btn-sm" onclick="reconToSale('${esc(r.name).replace(/'/g,"&#39;")}','${esc(r.bUom||'')}',${r.bought})" title="Key this into a sale">Sale</button>
+        <button class="btn btn-sm" onclick="reconToSale('${jsq(r.name)}','${jsq(r.bUom||'')}',${r.bought})" title="Key this into a sale">Sale</button>
         ${r.pid?`<button class="btn btn-sm" onclick="reconMark('${d}','${r.pid}')" title="Leftover stock, not a mistake">Stock</button>`:''}
       </div>`:''}
       ${tag==='marked'&&r.pid?`<button class="btn btn-sm" onclick="reconUnmark('${d}','${r.pid}')">Undo</button>`:''}
